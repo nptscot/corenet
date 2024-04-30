@@ -58,20 +58,20 @@ srn = sf::read_sf("srn.gpkg")
 # Get OSM data (for future reference)
 osm = get_travel_network("Scotland", boundary = edinburgh_3km, boundary_type = "clipsrc")
 names(osm)
-#  [1] "osm_id"                "name"                  "highway"              
-#  [4] "man_made"              "maxspeed"              "oneway"               
-#  [7] "bicycle"               "cycleway"              "cycleway_left"        
-# [10] "cycleway_right"        "cycleway_both"         "lanes"                
-# [13] "lanes_both_ways"       "lanes_forward"         "lanes_backward"       
-# [16] "lanes_bus"             "lanes_bus_conditional" "width"                
-# [19] "segregated"            "sidewalk"              "footway"              
-# [22] "service"               "surface"               "tracktype"            
-# [25] "smoothness"            "access"                "z_order"              
-# [28] "other_tags"            "geometry" 
+#  [1] "osm_id"                "name"                  "highway"
+#  [4] "man_made"              "maxspeed"              "oneway"
+#  [7] "bicycle"               "cycleway"              "cycleway_left"
+# [10] "cycleway_right"        "cycleway_both"         "lanes"
+# [13] "lanes_both_ways"       "lanes_forward"         "lanes_backward"
+# [16] "lanes_bus"             "lanes_bus_conditional" "width"
+# [19] "segregated"            "sidewalk"              "footway"
+# [22] "service"               "surface"               "tracktype"
+# [25] "smoothness"            "access"                "z_order"
+# [28] "other_tags"            "geometry"
 cycle_net = get_cycling_network(osm)
 drive_net = get_driving_network_major(osm)
 cycle_net = distance_to_road(cycle_net, drive_net)
-cycle_net = classify_cycle_infrastructure(cycle_net) 
+cycle_net = classify_cycle_infrastructure(cycle_net)
 names(cycle_net)
 cycle_net |>
   select(cycle_segregation) |>
