@@ -1,5 +1,5 @@
 Package: corenet
-Title: What the Package Does (One Line, Title Case)
+Title: Generate Core Transport Networks
 Version: 0.0.1
 Authors@R: c(
     person("Zhao", "Wang", , "wangzhao0217@gmail.com", role = c("aut", "cre"),
@@ -7,7 +7,11 @@ Authors@R: c(
     person("Robin", "Lovelace", role = c("aut", "ctb"),
            comment = c(ORCID = "0000-0001-5679-6536"))
   )
-Description: What the package does (one paragraph).
+Description: This package provides functions to generate 'core' transport networks from
+    'complete' transport network datasets. It can take a transport network from
+    'OpenStreetMap' and saved as an 'sf' object via 'osmextract' or other package
+    and generate a smaller network that represents key routes enabling most people
+    to get to within a certain distance of most places.
 License: MIT + file LICENSE
 URL: https://nptscot.github.io/corenet/
 Depends: 
