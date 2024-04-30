@@ -2,8 +2,11 @@ Package: corenet
 Title: What the Package Does (One Line, Title Case)
 Version: 0.0.1
 Authors@R: 
-    person("Zhao", "Wang", , "wangzhao0217@gmail.com", role = c("aut", "cre"),
-           comment = c(ORCID = "0000-0002-4054-0533"))
+    c(person("Zhao", "Wang", , "wangzhao0217@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-4054-0533")),
+    person("Robin", "Lovelace", role = c("aut", "ctb"),
+           comment = c(ORCID = "0000-0001-5679-6536"))
+    )
 Description: What the package does (one paragraph).
 License: MIT + file LICENSE
 Encoding: UTF-8
