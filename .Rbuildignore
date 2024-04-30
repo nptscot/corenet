@@ -5,7 +5,6 @@
 ^docs$
 ^pkgdown$
 ^data-raw$
-^Data$
 zip
 gpkg
 ^Doc$
