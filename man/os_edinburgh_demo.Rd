@@ -12,10 +12,9 @@ Data from OS Open Roads, Edinburgh, 3 km radius
 }
 \examples{
 library(sf)
-# TODO: fix this
-# data(os_edinburgh_demo)
 names(os_edinburgh_demo)
-os_edinburgh = get_edinburgh_6km()
-head(os_edinburgh)
+plot(os_edinburgh_demo)
+# Larger example:
+# os_edinburgh = get_edinburgh_6km()
 }
 \keyword{datasets}
