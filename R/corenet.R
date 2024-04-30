@@ -12,3 +12,19 @@ corenet = function(net, tbc) {
     data.frame(x = 1, y = 2) |>
       utils::head()
 }
+
+
+
+#' Data from edinburgh's OSM network
+#'
+#'
+#' @docType data
+#' @keywords datasets
+#' @name osm_edinburgh_demo
+#' @format An sf data frame
+#' @examples 
+#' library(sf)
+#' names(osm_edinburgh_demo)
+#' head(osm_edinburgh_demo)
+#' plot(osm_edinburgh_demo)
+NULL
