@@ -18,4 +18,12 @@ knitr::opts_chunk$set(
 
 ```{r, eval=FALSE, echo=FALSE}
 # Code here used to set-up the package, saved for reference... 
+# Check the pkg name is available
+if (!require("remotes")) {
+  install.packages("remotes")
+}
+remotes::install_cran("available")
+available::available("corenet")
+# Create the package
+usethis::use_description()
 ```
