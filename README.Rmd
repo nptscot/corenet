@@ -20,9 +20,6 @@ knitr::opts_chunk$set(
 ```{r, eval=FALSE, echo=FALSE}
 # Code here used to set-up the package, saved for reference... 
 # Check the pkg name is available
-if (!require("remotes")) {
-  install.packages("remotes")
-}
 remotes::install_cran("available")
 available::available("corenet")
 # Create the package
@@ -36,4 +33,26 @@ usethis::use_mit_license("Zhao Wang")
 # Add continuous integration
 devtools::check()
 usethis::use_github_action()
+# Set-up website
+usethis::use_pkgdown()
+# Use GitHub pages:
+usethis::use_github_pages()
+# Action to build and push to the website with every commit:
+usethis::use_pkgdown_github_pages()
+
+devtools::build_readme()
+
+# # Publish to CRAN (when ready):
+# devtools::release()
+```
+
+The goal of corenet is to provide a set of functions to generate 'core' route networks for transport planning.
+
+Install it with:
+
+```{r, eval=FALSE}
+if (!require("remotes")) {
+  install.packages("remotes")
+}
+remotes::install_github("nptscot/corenet")
 ```
