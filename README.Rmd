@@ -1,0 +1,21 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# corenet
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+```{r, eval=FALSE, echo=FALSE}
+# Code here used to set-up the package, saved for reference... 
+```
