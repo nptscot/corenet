@@ -27,4 +27,13 @@ remotes::install_cran("available")
 available::available("corenet")
 # Create the package
 usethis::use_description()
+# Add package dependencies
+usethis::use_package("sf")
+usethis::use_build_ignore("README.Rmd")
+# Add license via usethis (MIT):
+usethis::use_mit_license("Zhao Wang")
+
+# Add continuous integration
+devtools::check()
+usethis::use_github_action()
 ```
