@@ -26,7 +26,12 @@ available::available("corenet")
 usethis::use_description()
 # Add package dependencies
 usethis::use_package("sf")
+usethis::use_package("tibble", type = "Suggests")
 usethis::use_build_ignore("README.Rmd")
+usethis::use_build_ignore("*.zip")
+usethis::use_build_ignore("*.gpkg")
+usethis::use_git_ignore("Data")
+usethis::use_git_ignore("Doc")
 # Add license via usethis (MIT):
 usethis::use_mit_license("Zhao Wang")
 
@@ -39,8 +44,14 @@ usethis::use_pkgdown()
 usethis::use_github_pages()
 # Action to build and push to the website with every commit:
 usethis::use_pkgdown_github_pages()
+# Create a function:
+usethis::use_r("corenet")
+# Create example osm_edinburgh_demo data object:
+usethis::use_data_raw("osm_edinburgh_demo")
 
 devtools::build_readme()
+# Check the package again:
+devtools::check()
 
 # # Publish to CRAN (when ready):
 # devtools::release()
