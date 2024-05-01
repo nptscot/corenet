@@ -1,6 +1,31 @@
 #' Generate a core network from road network data
 #'
-#' Description to go here...
+#' 
+#' This function returns OSM keys that are relevant for active travel
+#'
+#' @export
+
+std_pkgs = c(
+              "sf", 
+              "dplyr", 
+              "tidygraph", 
+              "igraph", 
+              "mapview", 
+              "tidyverse", 
+              "osmextract", 
+              "geos", 
+              "dbscan", 
+              "sfnetworks", 
+              "rsgeo",
+              "targets"
+            )
+
+dev_pkgs = c(
+              "stplanr", 
+              "rsgeo"
+            )
+
+#' This function returns coherent netwrok for cycling
 #'
 #' @param net A road network object, of class sf
 #' @param tbc An object to be determined
@@ -8,10 +33,12 @@
 #' @export
 #' @examples
 #' corenet()
-corenet = function(net, tbc) {
+corenet = function(net, tbc , crs = "EPSG:27700", ) {
   data.frame(x = 1, y = 2) |>
     utils::head()
 }
+
+
 
 #' Get the Edinburgh road network, within radius of 6 km of the center
 #'
