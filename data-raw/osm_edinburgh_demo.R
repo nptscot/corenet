@@ -7,8 +7,13 @@ edinburgh = zonebuilder::zb_zone("Edinburgh")
 edinburgh_3km = edinburgh |>
   # Change number in next line to change zone size:
   filter(circle_id <= 2) |>
-  sf::st_union()
-
+  sf::st_union() |>
+  sf::st_transform(27700)
+edinburgh_6km = edinburgh |>
+  # Change number in next line to change zone size:
+  filter(circle_id <= 3) |>
+  sf::st_union() |>
+  sf::st_transform(27700)
 if (!file.exists("srn.gpkg")) {
   message("Missing the SRN dataset locally, download it from the DfT or releases")
   u = "https://api.os.uk/downloads/v1/products/OpenRoads/downloads?area=GB&format=GeoPackage&redirect"
@@ -35,24 +40,40 @@ if (!file.exists("srn.gpkg")) {
   # [21] "geometry"
   table(open_roads_national$trunk_road)
   open_roads_cleaned = open_roads_national |>
-    filter(trunk_road) |>
+    # filter(trunk_road) |>
     transmute(
       name = name_1,
       road_function = road_function,
       form_of_way = form_of_way,
       road_classification = road_classification
     )
-
-  sf::write_sf(srn, "srn.gpkg", delete_dsn = TRUE)
+  open_roads_edinburgh = open_roads_cleaned[edinburgh_3km, , op = sf::st_within]
+  # Check the size of the dataset:
+  nrow(open_roads_edinburgh) / nrow(open_roads_national)
+  object.size(open_roads_edinburgh) |>
+    # Format in MB:
+    format(units = "MB")
+  sf::write_sf(open_roads_edinburgh, "open_roads_edinburgh.gpkg", delete_dsn = TRUE)
   # Release data:
-  if (FASLE) {
-    system("gh release upload v1.0 srn.gpkg --clobber")
+  if (FALSE) {
+    usethis::use_github_release()
+    system("gh release upload v0.0.1 open_roads_edinburgh.gpkg --clobber")
   }
+  # Same for 6km:
+  open_roads_edinburgh_6km = open_roads_cleaned[edinburgh_6km, , op = sf::st_within]
+  sf::write_sf(open_roads_edinburgh_6km, "open_roads_edinburgh_6km.gpkg", delete_dsn = TRUE)
+    # Release data:
+    if (FALSE) {
+        system("gh release upload v0.0.1 open_roads_edinburgh_6km.gpkg --clobber")
+        }
 }
-srn = sf::read_sf("srn.gpkg")
 
-
-
+os_edinburgh_demo = sf::read_sf("open_roads_edinburgh.gpkg")
+# Remove CRS info to avoid warning with non ascii characters:
+sf::st_crs(os_edinburgh_demo) = NA
+usethis::use_data(os_edinburgh_demo, overwrite = TRUE)
+# Let's see how big the file is:
+fs::file_size("data/os_edinburgh_demo.rda")
 
 
 # Get OSM data (for future reference)
