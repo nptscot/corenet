@@ -67,3 +67,20 @@ if (!require("remotes")) {
 }
 remotes::install_github("nptscot/corenet")
 ```
+
+```{r}
+library(osmactive)
+library(tmap) 
+library(dplyr) 
+```
+
+Alternatively, you can load the package with the following for local development:
+
+```{r, include=FALSE}
+devtools::load_all()
+```
+
+## Minimal example
+
+The package comes with example data for testing functions.
+You can test the functions as follows:
