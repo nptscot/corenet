@@ -71,11 +71,7 @@ cohesive_network_prep = function(combined_network_tile, crs = "EPSG:27700", para
 
       OS_zones = open_roads_national[sf::st_union(zones), , op = sf::st_intersects]
 
-      # Filter and transform OS zone data
-      filtered_OS_zones = OS_zones |> 
-                           dplyr::filter(road_function == 'A Road' | road_function == 'B Road' | road_function == 'Minor Road') |>
-                           sf::st_transform(crs) |>
-                           sf::st_zm()
+zones = zonebuilder::zb_zone("Edinburgh", n_circles = 1) |> sf::st_transform(crs = crs)
 
       # Assign functions for data aggregation based on network attributes
       name_list = names(NPT_zones)
@@ -92,7 +88,7 @@ cohesive_network_prep = function(combined_network_tile, crs = "EPSG:27700", para
       }
 
       # Merge road networks with specified parameters
-      OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 15, funs = funs, max_angle_diff = 10)
+      OS_NPT_zones = stplanr::rnet_merge(OS_zones, NPT_zones, dist = 15, funs = funs, segment_length = 10,max_angle_diff = 10)
 
       # Store the processed data for the current area
       cohesive_network_list[[area]] = OS_NPT_zones
@@ -125,30 +121,37 @@ cohesive_network_prep = function(combined_network_tile, crs = "EPSG:27700", para
 #' @export
 #' @examples
 
-corenet = function(network_tile, combined_grid_buffer, base_value = "all_fastest_bicycle_go_dutch", crs = "EPSG:27700", min_percentile = 0.95, dist = 10) {
+corenet = function(network_tile, combined_grid_buffer, base_value = "all_fastest_bicycle_go_dutch", crs = "EPSG:27700", min_percentile = 0.85, dist = 10) {
   if (!is.null(base_value) && base_value %in% names(network_tile)) {
-    
-    # Replace NA with 0 only in 'all_fastest_bicycle_go_dutch'
-    network_tile <- network_tile %>%
-      mutate(base_value = replace_na(base_value, 0))
-    
+edinburgh_central = zonebuilder::zb_zone("Edinburgh", n_circles = 3)
+edinburgh_central = edinburgh_central|>sf::st_transform(crs = "EPSG:27700")
+network_tile = NPT_MM_OSM_CITY[["City of Edinburgh"]][sf::st_union(edinburgh_central), , op = sf::st_within]
+
+
+    # Filter and transform OS zone data
+    network_tile = network_tile |> 
+                          dplyr::filter(road_function == 'A Road' | road_function == 'B Road' | road_function == 'Minor Road') |>
+                          sf::st_transform(crs) |>
+                          sf::st_zm()
     # Calculate the minimum value at the specified percentile
     min_percentile_value = stats::quantile(network_tile[[base_value]], probs = min_percentile, na.rm = TRUE)
-    network_tile_filtered = dplyr::filter(network_tile, base_value > min_percentile_value)
+    network_tile_filtered = dplyr::filter(network_tile, base_value > 2300)
 
     # Split network data into manageable segments
-    network_tile_split = stplanr::line_segment(network_tile_filtered, segment_length = 20, use_rsgeo = TRUE)
+    network_tile_split = stplanr::line_segment(network_tile, segment_length = 20, use_rsgeo = TRUE)
 
+    filtered_roads = network_tile_split[network_tile_split$all_fastest_bicycle_go_dutch > 2300, ]
     # Calculate centroids of network segments
-    centroids = sf::st_centroid(network_tile_split)
-
+    centroids = sf::st_centroid(filtered_roads)
+summary(network_tile_split$all_fastest_bicycle_go_dutch)
     # Perform DBSCAN clustering
     coordinates = sf::st_coordinates(centroids)
-    clusters = dbscan::dbscan(coordinates, eps = 18, minPts = 1)
-    centroids$cluster = clusters$cluster
-    unique_centroids = centroids[!duplicated(centroids$cluster), ]    
-
-
+    coordinates_clean <- na.omit(coordinates)
+    clusters = dbscan(coordinates_clean, eps = 19, minPts = 1)
+    coordinates_clean$cluster = clusters$cluster
+    unique_centroids = centroids[!duplicated(coordinates_clean$cluster), ]    
+    print(dim(unique_centroids))
+mapview(unique_centroids)
   } else {
     grid_sf = combined_grid_buffer
 
@@ -236,7 +239,7 @@ corenet = function(network_tile, combined_grid_buffer, base_value = "all_fastest
   for (i in 1:4) {
     largest_component_sf_without_dangles = removeDangles(largest_component_sf_without_dangles)
   }
-
+mapview(largest_component_sf_without_dangles) +mapview(unique_centroids)
   return(largest_component_sf_without_dangles)
 }
 
@@ -359,49 +362,7 @@ prepare_network = function(network, A_Road = 1, B_Road = 1, Minor_Road = 1000000
 #' @param shortest Logical indicating whether the shortest paths are calculated (TRUE) or weighted paths (FALSE).
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 
-calculate_paths_from_point_dist = function(network, point, dist= 500, centroids, shortest = FALSE) {
-    path_cache = list()
-    # Ensure CRS is correctly set for distance measurement
-    if (is.na(sf::st_crs(network)) || sf::st_crs(network)$units != "m") {
-    network <- sf::st_transform(network, crs = 27700) # Example: UTM zone 32N
-    }
 
-
-    point_key = paste(sort(as.character(point)), collapse = "_")
-
-    if (point_key %in% names(path_cache)) {
-    return(path_cache[[point_key]])
-    }
-
-    # Convert to sfc if not already
-    point_geom = sf::st_as_sfc(point)
-    centroids_geom = sf::st_as_sfc(centroids)
-
-    # Calculate distances
-    distances = sf::st_distance(point_geom, centroids_geom)
-
-    # Filter centroids based on the distance criteria
-    valid_centroids = centroids[distances >= units::set_units(2, "m") & distances <= units::set_units(dist, "m"),]
-
-    if (nrow(valid_centroids) > 0) {
-    if (shortest) {
-        paths_from_point = sfnetworks::st_network_paths(network, from = point_geom, to = sf::st_as_sfc(valid_centroids), weights = NULL, type = "shortest") 
-    } else {
-        paths_from_point = sfnetworks::st_network_paths(network, from = point_geom, to = sf::st_as_sfc(valid_centroids), weights = "weight",type = "shortest") 
-    }
-    edges_in_paths = paths_from_point |>  
-        dplyr::pull(edge_paths) |> 
-        base::unlist() |> base::unique()
-
-    result = network |> dplyr::slice(unique(edges_in_paths)) |> sf::st_as_sf()
-    } else {
-    result = NULL
-    }
-
-    path_cache[[point_key]] = result
-
-    return(result)
-}
 calculate_paths_from_point_dist = function(network, point, dist = 500, centroids, shortest = FALSE) {
     # Ensure the network's CRS is correctly set for distance measurement in meters
     if (is.na(sf::st_crs(network)) || sf::st_crs(network)$units != "m") {
@@ -489,10 +450,8 @@ calculate_largest_component = function(network_tile) {
 #' @param tolerance The distance tolerance for identifying isolated endpoints as dangling.
 #' @return An `sf` object with dangling line segments removed.
 removeDangles = function(road_network, tolerance = 0.001) {
-    # Ensure the network is cast to LINESTRING if not already
-    if (sf::st_geometry_type(road_network) != "LINESTRING") {
-        road_network = sf::st_cast(road_network, "LINESTRING")
-    }
+    # Convert to Spatial Lines if not already
+    road_network_lines = st_cast(road_network, "LINESTRING")
 
     # Extract and combine all end points of line segments
     end_points = do.call(rbind, lapply(road_network_lines$geometry, function(line) {
@@ -515,4 +474,6 @@ removeDangles = function(road_network, tolerance = 0.001) {
 
     return(road_network_without_dangles)
 }
+
+
 
