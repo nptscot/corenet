@@ -2,21 +2,32 @@
 % Please edit documentation in R/corenet.R
 \name{corenet}
 \alias{corenet}
-\title{Generate a core network from road network data}
+\title{Generate a base network for developing a cohesive cycling network}
 \usage{
-corenet(net, tbc)
+corenet(
+  combined_network_tile,
+  network_tile,
+  combined_grid_buffer,
+  crs = "EPSG:27700",
+  dist = 10
+)
 }
 \arguments{
-\item{net}{A road network object, of class sf}
+\item{network_tile}{Spatial object ob.}
 
-\item{tbc}{An object to be determined}
+\item{combined_grid_buffer}{Additional spatial data, currently unused in the road_function}
+
+\item{crs}{Coordinate reference system for transformation, default is "EPSG:27700".}
+
+\item{dist}{The distance threshold used in path calculations, default is 10.}
+
+\item{min_percentile}{Minimum percentile for filtering network data, default is 0.85.}
 }
 \value{
-A core network object, of class sf
+A spatial object representing the largest cohesive component of the network without dangles.
 }
 \description{
-Description to go here...
-}
-\examples{
-corenet()
+This function processes the provided network data to extract and analyze
+the most significant routes based on a percentile threshold, performs spatial operations,
+clusters data points, and calculates the largest network component without dangles.
 }

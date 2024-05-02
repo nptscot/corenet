@@ -71,7 +71,7 @@ remotes::install_github("nptscot/corenet")
 ```{r}
 library(osmactive)
 library(tmap) 
-library(dplyr) 
+
 ```
 
 Alternatively, you can load the package with the following for local development:
@@ -86,57 +86,57 @@ The package comes with example data for testing functions.
 You can test the functions as follows:
 
 ```{r}
+zones = zonebuilder::zb_zone("Edinburgh", n_circles = 1) |> sf::st_transform(crs = "EPSG:27700")
+
+# load NPT data
+combined_network_tile_path = "inputdata/combined_network_tile.geojson"
+combined_network_tile = sf::read_sf(combined_network_tile_path) |> sf::st_transform(crs = "EPSG:27700") |>
+    dplyr::select(all_fastest_bicycle_go_dutch, geometry)
+
+mini_NPT = combined_network_tile[sf::st_union(zones), , op = sf::st_intersects]
+
+# save the mini_NPT to geosjon
+# sf::st_write(mini_NPT, "data/Minimal_NPT.geojson", driver = "GeoJSON")
+
+# load OS data
+open_roads_national = sf::read_sf("inputdata/oproad_gb.gpkg", layer = "road_link") |> 
+              sf::st_transform(crs)
+ 
+mini_OS = open_roads_national[sf::st_union(zones), , op = sf::st_intersects] |>
+    dplyr::select(road_function, geometry)
+
+# save the mini_OS to geosjon
+# sf::st_write(mini_OS, "data/Minimal_OS.geojson", driver = "GeoJSON")
+```
+Demo of the corenet function:
+```{r}
+library(dplyr) 
+library(mapview)
+
+devtools::load_all()
 parameters = jsonlite::read_json("parameters.json", simplifyVector = T)
-lads = sf::read_sf("inputdata/la_regions_2023.geojson")
-region_names = unique(lads$Region)[c(3, 2, 1, 4, 5, 6)] # Start with Glasgow
-cities_region_names = list()
 
-for (region in region_names) {
-# Assuming 'CityName' is the column that holds the names of cities or localities
-  cities_in_region = lads |> 
-    filter(Region == region) |> 
-    pull(LAD23NM) |> 
-    unique() # Ensure unique city names
-
-# Add the city names to the list under the region name
-  cities_region_names[[region]] = cities_in_region
-}
+# Specify the parameters 
+region = "Edinburgh and Lothians"
+parameters$region = region
+parameters$coherent_area = "City of Edinburgh"
 ```
 
 ```{r}
-devtools::load_all()
-# for (region in region_names[1:6]) {
-
-region = "Edinburgh and Lothians"
-message("Processing coherent network for region: ", region)
-parameters$region = region
-parameters$coherent_area = "City of Edinburgh"
-
-combined_network_tile_path = "inputdata/combined_network_tile.geojson"
-combined_network_tile = sf::read_sf(combined_network_tile_path) |> sf::st_transform(crs = crs)
+combined_network_tile_path = "data/Minimal_NPT.geojson"
+combined_network_tile = sf::read_sf(combined_network_tile_path) |> sf::st_transform(crs = "EPSG:27700")
 
 NPT_MM_OSM = cohesive_network_prep(combined_network_tile, crs = "EPSG:27700", parameters = parameters)
 
 NPT_MM_OSM_CITY =  NPT_MM_OSM$cohesive_network
-
 NPT_MM_OSM_ZONE =  NPT_MM_OSM$cohesive_zone
 
 city = "City of Edinburgh"
 city_filename = gsub(" ", "_", city)
-
-CITY = NPT_MM_OSM_CITY[[city]]
+CITY = NPT_MM_OSM_BASE[[city]]
 ZONE = NPT_MM_OSM_ZONE[[city]]
 
-percentile = 85
-print(paste0("Processing coherent network for ", city, " at percentile ", percentile))
-percentile_factor = percentile / 100
-grouped_net = coherent_network_group(CITY, ZONE, percentile_factor)
+CN_network = coherent_network_group(CITY, ZONE)
 
-
-rnet_coherent = corenet(network_tile = CITY, combined_grid_buffer = ZONE, min_percentile = percentile_factor, base_value = "all_fastest_bicycle_go_dutch")
-
-
-
-network_tile_filtered= network_tile_filtered|> sf::st_transform(crs = crs)
-
-
+mapview::mapview(CN_network)
+```

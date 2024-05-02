@@ -71,7 +71,10 @@ cohesive_network_prep = function(combined_network_tile, crs = "EPSG:27700", para
 
       OS_zones = open_roads_national[sf::st_union(zones), , op = sf::st_intersects]
 
-zones = zonebuilder::zb_zone("Edinburgh", n_circles = 1) |> sf::st_transform(crs = crs)
+      filtered_OS_zones = OS_zones |> 
+                            dplyr::filter(road_function == 'A Road' | road_function == 'B Road' | road_function == 'Minor Road') |>
+                            sf::st_transform(crs) |>
+                            sf::st_zm()
 
       # Assign functions for data aggregation based on network attributes
       name_list = names(NPT_zones)
@@ -88,16 +91,16 @@ zones = zonebuilder::zb_zone("Edinburgh", n_circles = 1) |> sf::st_transform(crs
       }
 
       # Merge road networks with specified parameters
-      OS_NPT_zones = stplanr::rnet_merge(OS_zones, NPT_zones, dist = 15, funs = funs, segment_length = 10,max_angle_diff = 10)
-
+      # OS_NPT_zones = stplanr::rnet_merge(OS_zones, NPT_zones, dist = 15, funs = funs, segment_length = 20,max_angle_diff = 10)
+      filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 15, funs = funs, segment_length = 20,max_angle_diff = 10)
       # Store the processed data for the current area
-      cohesive_network_list[[area]] = OS_NPT_zones
+      cohesive_network_list[[area]] = filtered_OS_NPT_zones
       cohesive_zone_list[[area]] = zones
 
       print(paste("Finished preparing the network data for the", area))
     }
 
-    return(list(cohesive_network = cohesive_network_list, cohesive_zone = cohesive_zone_list))
+    return(list(cohesive_zone = cohesive_zone_list, cohesive_network = cohesive_network_list))
 
   } else {
     print("No coherent area specified, proceeding with default settings.")
@@ -105,15 +108,14 @@ zones = zonebuilder::zb_zone("Edinburgh", n_circles = 1) |> sf::st_transform(crs
 }
 
 
-#' Generate a cohesive network based on the prepared network data
+#' Generate a base network for developing a cohesive cycling network
 #'
 #' This function processes the provided network data to extract and analyze
 #' the most significant routes based on a percentile threshold, performs spatial operations,
 #' clusters data points, and calculates the largest network component without dangles.
 #'
-#' @param network_tile Spatial object representing network data.
+#' @param network_tile Spatial object ob.
 #' @param combined_grid_buffer Additional spatial data, currently unused in the road_function
-#' @param base_value Attribute column name to analyze in `network_tile`. Default is 'all_fastest_bicycle_go_dutch'.
 #' @param crs Coordinate reference system for transformation, default is "EPSG:27700".
 #' @param min_percentile Minimum percentile for filtering network data, default is 0.85.
 #' @param dist The distance threshold used in path calculations, default is 10.
@@ -121,37 +123,24 @@ zones = zonebuilder::zb_zone("Edinburgh", n_circles = 1) |> sf::st_transform(crs
 #' @export
 #' @examples
 
-corenet = function(network_tile, combined_grid_buffer, base_value = "all_fastest_bicycle_go_dutch", crs = "EPSG:27700", min_percentile = 0.85, dist = 10) {
-  if (!is.null(base_value) && base_value %in% names(network_tile)) {
-edinburgh_central = zonebuilder::zb_zone("Edinburgh", n_circles = 3)
-edinburgh_central = edinburgh_central|>sf::st_transform(crs = "EPSG:27700")
-network_tile = NPT_MM_OSM_CITY[["City of Edinburgh"]][sf::st_union(edinburgh_central), , op = sf::st_within]
+corenet = function(combined_network_tile, network_tile, combined_grid_buffer, crs = "EPSG:27700", dist = 10) {
 
+  if ("all_fastest_bicycle_go_dutch" %in% names(network_tile)) {
 
-    # Filter and transform OS zone data
-    network_tile = network_tile |> 
-                          dplyr::filter(road_function == 'A Road' | road_function == 'B Road' | road_function == 'Minor Road') |>
-                          sf::st_transform(crs) |>
-                          sf::st_zm()
-    # Calculate the minimum value at the specified percentile
-    min_percentile_value = stats::quantile(network_tile[[base_value]], probs = min_percentile, na.rm = TRUE)
-    network_tile_filtered = dplyr::filter(network_tile, base_value > 2300)
+    combined_network_tile = sf::st_transform(combined_network_tile, crs)
+    combined_network_tile_split = stplanr::line_segment(combined_network_tile, segment_length = 20, use_rsgeo = TRUE)
 
-    # Split network data into manageable segments
-    network_tile_split = stplanr::line_segment(network_tile, segment_length = 20, use_rsgeo = TRUE)
+    filtered_roads = combined_network_tile_split[combined_network_tile_split$all_fastest_bicycle_go_dutch > 1500, ]
 
-    filtered_roads = network_tile_split[network_tile_split$all_fastest_bicycle_go_dutch > 2300, ]
     # Calculate centroids of network segments
     centroids = sf::st_centroid(filtered_roads)
-summary(network_tile_split$all_fastest_bicycle_go_dutch)
+
     # Perform DBSCAN clustering
     coordinates = sf::st_coordinates(centroids)
-    coordinates_clean <- na.omit(coordinates)
-    clusters = dbscan(coordinates_clean, eps = 19, minPts = 1)
-    coordinates_clean$cluster = clusters$cluster
-    unique_centroids = centroids[!duplicated(coordinates_clean$cluster), ]    
-    print(dim(unique_centroids))
-mapview(unique_centroids)
+    clusters = dbscan::dbscan(coordinates, eps = 18, minPts = 1)
+    centroids$cluster = clusters$cluster
+    unique_centroids = centroids[!duplicated(centroids$cluster), ]    
+
   } else {
     grid_sf = combined_grid_buffer
 
@@ -220,7 +209,6 @@ mapview(unique_centroids)
   # Prepare network and calculate paths
   prepared_network = prepare_network(network_tile, transform_crs = crs,  A_Road = 1, B_Road = 1, Minor_Road = 100000000)
 
-  path_cache = list()
 
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
@@ -236,10 +224,10 @@ mapview(unique_centroids)
   largest_component_sf_without_dangles = removeDangles(largest_component_sf, tolerance = 0.001)
 
   # Remove dangles multiple times to ensure a clean network
-  for (i in 1:4) {
+  for (i in 1:6) {
     largest_component_sf_without_dangles = removeDangles(largest_component_sf_without_dangles)
   }
-mapview(largest_component_sf_without_dangles) +mapview(unique_centroids)
+
   return(largest_component_sf_without_dangles)
 }
 
@@ -248,15 +236,15 @@ mapview(largest_component_sf_without_dangles) +mapview(unique_centroids)
 #'
 #' @param CITY The road network for the city, expected to be an sf object.
 #' @param ZONE Combined grid buffer, presumably an area of interest within the city, also an sf object.
-#' @param min_percentile Minimum percentile threshold for selecting network edges.
 #' @return A grouped sf network with ranked groups based on mean potential.
 #' @export
 #' @examples
-#' coherent_network_group(city_network, city_zone, 25, TRUE)
+#' coherent_network_group(city_network, city_zone)
 
-coherent_network_group = function(CITY, ZONE, min_percentile) {
+coherent_network_group = function(CITY, ZONE) {
+  # library(tidygraph)
   # Generate coherent network
-  rnet_coherent = cohesive_network(network_tile = CITY, combined_grid_buffer = ZONE, min_percentile = min_percentile)
+  rnet_coherent = corenet(combined_network_tile, network_tile = CITY, combined_grid_buffer = ZONE)
   
   # Select relevant columns
   rnet_coherent_selected = rnet_coherent |>
@@ -278,7 +266,6 @@ coherent_network_group = function(CITY, ZONE, min_percentile) {
   # Return the processed network
   return(grouped_net)
 }
-
 
 #' Get the Edinburgh road network, within radius of 6 km of the center
 #'
@@ -364,6 +351,9 @@ prepare_network = function(network, A_Road = 1, B_Road = 1, Minor_Road = 1000000
 
 
 calculate_paths_from_point_dist = function(network, point, dist = 500, centroids, shortest = FALSE) {
+    
+    path_cache = list()
+    
     # Ensure the network's CRS is correctly set for distance measurement in meters
     if (is.na(sf::st_crs(network)) || sf::st_crs(network)$units != "m") {
         network = sf::st_transform(network, crs = 27700)  # Example: UTM zone 32N for meters
