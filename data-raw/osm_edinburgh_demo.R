@@ -48,6 +48,9 @@ if (!file.exists("srn.gpkg")) {
       road_classification = road_classification
     )
   open_roads_edinburgh = open_roads_cleaned[edinburgh_3km, , op = sf::st_within]
+  # Add NPT flow data for go_dutch_all_fastest:
+  npt_data = readRDS("TBC")
+  # Do the join
   # Check the size of the dataset:
   nrow(open_roads_edinburgh) / nrow(open_roads_national)
   object.size(open_roads_edinburgh) |>
