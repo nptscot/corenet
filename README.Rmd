@@ -67,14 +67,7 @@ if (!require("remotes")) {
 }
 remotes::install_github("nptscot/corenet")
 ```
-
-```{r}
-library(osmactive)
-library(tmap) 
-
-```
-
-Alternatively, you can load the package with the following for local development:
+Load the package with the following for local development:
 
 ```{r, include=FALSE}
 devtools::load_all()
@@ -86,7 +79,7 @@ The package comes with example data for testing functions.
 You can test the functions as follows:
 
 ```{r}
-zones = zonebuilder::zb_zone("Edinburgh", n_circles = 1) |> sf::st_transform(crs = "EPSG:27700")
+zones = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")
 
 # load NPT data
 combined_network_tile_path = "inputdata/combined_network_tile.geojson"
@@ -96,7 +89,7 @@ combined_network_tile = sf::read_sf(combined_network_tile_path) |> sf::st_transf
 mini_NPT = combined_network_tile[sf::st_union(zones), , op = sf::st_intersects]
 
 # save the mini_NPT to geosjon
-# sf::st_write(mini_NPT, "data/Minimal_NPT.geojson", driver = "GeoJSON")
+# sf::st_write(mini_NPT, "data/Minimal_NPT.geojson", delete_dsn = TRUE)
 
 # load OS data
 open_roads_national = sf::read_sf("inputdata/oproad_gb.gpkg", layer = "road_link") |> 
@@ -108,6 +101,7 @@ mini_OS = open_roads_national[sf::st_union(zones), , op = sf::st_intersects] |>
 # save the mini_OS to geosjon
 # sf::st_write(mini_OS, "data/Minimal_OS.geojson", driver = "GeoJSON")
 ```
+
 Demo of the corenet function:
 ```{r}
 library(dplyr) 
@@ -133,7 +127,7 @@ NPT_MM_OSM_ZONE =  NPT_MM_OSM$cohesive_zone
 
 city = "City of Edinburgh"
 city_filename = gsub(" ", "_", city)
-CITY = NPT_MM_OSM_BASE[[city]]
+CITY = NPT_MM_OSM_CITY[[city]]
 ZONE = NPT_MM_OSM_ZONE[[city]]
 
 CN_network = coherent_network_group(CITY, ZONE)

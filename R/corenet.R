@@ -28,7 +28,7 @@ dev_pkgs = c(
 # Declare global variables to avoid 'no visible binding' notes
 utils::globalVariables(c("edge_paths", "combined_network_tile", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
-                         "road_function", "network_tile_transformed", "grid_id", "density", 
+                         "road_function",  "grid_id", "density", 
                          "max_value", "min_value", "arterialness", "road_score"))
 
 #' This function prepare the base netwrok for generating cohesive cycling network using NPT data.
@@ -149,7 +149,7 @@ corenet = function(combined_network_tile, network_tile, combined_grid_buffer, cr
 
     grid_sf$grid_id = seq_len(nrow(grid_sf))
 
-    split_network = sf::st_intersection(network_tile_transformed, grid_sf)
+    split_network = sf::st_intersection(combined_network_tile, grid_sf)
 
     select_by_density = function(density) {
       if (density < 10) {
@@ -255,7 +255,7 @@ coherent_network_group = function(CITY, ZONE) {
   # Group and process the network
   grouped_net = rnet_coherent_selected |>
     sfnetworks::as_sfnetwork(directed = FALSE) |>
-    tidygraph::morph(to_linegraph) |>
+    tidygraph::morph(tidygraph::to_linegraph) |>
     dplyr::mutate(group = tidygraph::group_edge_betweenness(n_groups = 12)) |>
     tidygraph::unmorph() |>
     tidygraph::activate(edges) |>
