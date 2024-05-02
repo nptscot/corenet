@@ -3,7 +3,6 @@
 #' 
 #' This function returns OSM keys that are relevant for active travel
 #'
-#' @export
 
 std_pkgs = c(
               "sf", 
@@ -26,6 +25,12 @@ dev_pkgs = c(
               "rsgeo"
             )
 
+# Declare global variables to avoid 'no visible binding' notes
+utils::globalVariables(c("edge_paths", "combined_network_tile", "all_fastest_bicycle_go_dutch", 
+                         "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
+                         "road_function", "network_tile_transformed", "grid_id", "density", 
+                         "max_value", "min_value", "arterialness", "road_score"))
+
 #' This function prepare the base netwrok for generating cohesive cycling network using NPT data.
 #'
 #' @param combined_network_tile NPT road network object, class sf.
@@ -33,8 +38,7 @@ dev_pkgs = c(
 #' @param parameters A list containing specific parameters like 'coherent_area'.
 #' @return A list of two elements: a cohesive network and zone data, both as sf objects.
 #' @export
-#' @examples
-#' 
+
 
 cohesive_network_prep = function(combined_network_tile, crs = "EPSG:27700", parameters) {
   # Initialize empty lists to store results and zones for each area
@@ -113,15 +117,14 @@ cohesive_network_prep = function(combined_network_tile, crs = "EPSG:27700", para
 #' This function processes the provided network data to extract and analyze
 #' the most significant routes based on a percentile threshold, performs spatial operations,
 #' clusters data points, and calculates the largest network component without dangles.
-#'
+#' @param combined_network_tile The NPT network, class sf.
 #' @param network_tile Spatial object ob.
 #' @param combined_grid_buffer Additional spatial data, currently unused in the road_function
 #' @param crs Coordinate reference system for transformation, default is "EPSG:27700".
-#' @param min_percentile Minimum percentile for filtering network data, default is 0.85.
 #' @param dist The distance threshold used in path calculations, default is 10.
 #' @return A spatial object representing the largest cohesive component of the network without dangles.
 #' @export
-#' @examples
+
 
 corenet = function(combined_network_tile, network_tile, combined_grid_buffer, crs = "EPSG:27700", dist = 10) {
 
@@ -238,8 +241,7 @@ corenet = function(combined_network_tile, network_tile, combined_grid_buffer, cr
 #' @param ZONE Combined grid buffer, presumably an area of interest within the city, also an sf object.
 #' @return A grouped sf network with ranked groups based on mean potential.
 #' @export
-#' @examples
-#' coherent_network_group(city_network, city_zone)
+
 
 coherent_network_group = function(CITY, ZONE) {
   # library(tidygraph)
@@ -267,30 +269,6 @@ coherent_network_group = function(CITY, ZONE) {
   return(grouped_net)
 }
 
-#' Get the Edinburgh road network, within radius of 6 km of the center
-#'
-#' @export
-#' @examples
-#' get_edinburgh_6km()
-get_edinburgh_6km = function() {
-  sf::read_sf("https://github.com/nptscot/corenet/releases/download/v0.0.1/open_roads_edinburgh_6km.gpkg")
-}
-
-
-#' Data from OS Open Roads, Edinburgh, 3 km radius
-#'
-#'
-#' @docType data
-#' @keywords datasets
-#' @name os_edinburgh_demo
-#' @format An sf data frame
-#' @examples
-#' library(sf)
-#' names(os_edinburgh_demo)
-#' plot(os_edinburgh_demo)
-#' # Larger example:
-#' # os_edinburgh = get_edinburgh_6km()
-NULL
 
 
 #' Prepare a network data structure by transforming, scoring, and weighting based on road types and conditions
@@ -300,7 +278,9 @@ NULL
 #' the network is ready for further analytical processes.
 #'
 #' @param network An sf object representing a spatial network.
-#' @param road_scores A named list where names are road types and values are scores associated with each road type.
+#' @param A_Road A numeric score for A Roads, default is 1.
+#' @param B_Road A numeric score for B Roads, default is 1.
+#' @param Minor_Road A numeric score for Minor Roads, default is 10000000.
 #' Example usage
 #' road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100000)
 #' @param transform_crs Numeric CRS code for coordinate transformation, default is 27700.
@@ -314,16 +294,16 @@ prepare_network = function(network, A_Road = 1, B_Road = 1, Minor_Road = 1000000
         sfnetworks::activate("edges") |>
         dplyr::mutate(
             # Normalize 'all_fastest_bicycle_go_dutch' and handle NA values
-            all_fastest_bicycle_go_dutch = if_else(is.na(all_fastest_bicycle_go_dutch), 0, all_fastest_bicycle_go_dutch),
+            all_fastest_bicycle_go_dutch = dplyr::if_else(is.na(all_fastest_bicycle_go_dutch), 0, all_fastest_bicycle_go_dutch),
             min_value = min(all_fastest_bicycle_go_dutch, na.rm = TRUE),
             max_value = max(all_fastest_bicycle_go_dutch, na.rm = TRUE),
-            arterialness = if_else(
+            arterialness = dplyr::if_else(
                 max_value > min_value,
                 (all_fastest_bicycle_go_dutch - min_value) / (max_value - min_value),
                 0  # Avoid division by zero by setting arterialness to 0 when min_value equals max_value
             ),
             # Dynamically apply road type scores
-            road_score = case_when(
+            road_score = dplyr::case_when(
                 road_function == "A Road" ~ A_Road,
                 road_function == "B Road" ~ B_Road,
                 road_function == "Minor Road" ~ Minor_Road,
@@ -441,23 +421,23 @@ calculate_largest_component = function(network_tile) {
 #' @return An `sf` object with dangling line segments removed.
 removeDangles = function(road_network, tolerance = 0.001) {
     # Convert to Spatial Lines if not already
-    road_network_lines = st_cast(road_network, "LINESTRING")
+    road_network_lines = sf::st_cast(road_network, "LINESTRING")
 
     # Extract and combine all end points of line segments
     end_points = do.call(rbind, lapply(road_network_lines$geometry, function(line) {
-    endpoints = rbind(st_coordinates(line)[1, ], st_coordinates(line)[nrow(st_coordinates(line)), ])
-    st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = st_crs(road_network))
+    endpoints = rbind(sf::st_coordinates(line)[1, ], sf::st_coordinates(line)[nrow(sf::st_coordinates(line)), ])
+    sf::st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = sf::st_crs(road_network))
     }))
 
     # Identify unique end points (potential dangles) using a spatial join to find nearby points
-    buffer_points = st_buffer(end_points, dist = tolerance)
-    overlaps = st_intersects(buffer_points, buffer_points, sparse = FALSE)
+    buffer_points = sf::st_buffer(end_points, dist = tolerance)
+    overlaps = sf::st_intersects(buffer_points, buffer_points, sparse = FALSE)
     isolated_points = end_points[rowSums(overlaps) == 1,]
 
     # Filter out road segments that end in these isolated points
-    segments_with_dangles = sapply(st_geometry(road_network_lines), function(geom) {
-    ends = st_sfc(st_point(st_coordinates(geom)[1,]), st_point(st_coordinates(geom)[nrow(st_coordinates(geom)),]), crs = st_crs(road_network))
-    any(st_intersects(ends, isolated_points, sparse = FALSE))
+    segments_with_dangles = sapply(sf::st_geometry(road_network_lines), function(geom) {
+    ends = sf::st_sfc(sf::st_point(sf::st_coordinates(geom)[1,]), sf::st_point(sf::st_coordinates(geom)[nrow(sf::st_coordinates(geom)),]), crs = sf::st_crs(road_network))
+    any(sf::st_intersects(ends, isolated_points, sparse = FALSE))
     })
 
     road_network_without_dangles = road_network_lines[!segments_with_dangles, ]

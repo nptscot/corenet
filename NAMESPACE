@@ -3,5 +3,3 @@
 export(coherent_network_group)
 export(cohesive_network_prep)
 export(corenet)
-export(get_edinburgh_6km)
-export(std_pkgs)

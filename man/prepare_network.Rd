@@ -15,11 +15,15 @@ prepare_network(
 \arguments{
 \item{network}{An sf object representing a spatial network.}
 
-\item{transform_crs}{Numeric CRS code for coordinate transformation, default is 27700.}
+\item{A_Road}{A numeric score for A Roads, default is 1.}
 
-\item{road_scores}{A named list where names are road types and values are scores associated with each road type.
+\item{B_Road}{A numeric score for B Roads, default is 1.}
+
+\item{Minor_Road}{A numeric score for Minor Roads, default is 10000000.
 Example usage
 road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100000)}
+
+\item{transform_crs}{Numeric CRS code for coordinate transformation, default is 27700.}
 }
 \value{
 An sfnetwork object with additional attributes like 'arterialness' and 'weight' based on road conditions.

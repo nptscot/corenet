@@ -13,6 +13,8 @@ corenet(
 )
 }
 \arguments{
+\item{combined_network_tile}{The NPT network, class sf.}
+
 \item{network_tile}{Spatial object ob.}
 
 \item{combined_grid_buffer}{Additional spatial data, currently unused in the road_function}
@@ -20,8 +22,6 @@ corenet(
 \item{crs}{Coordinate reference system for transformation, default is "EPSG:27700".}
 
 \item{dist}{The distance threshold used in path calculations, default is 10.}
-
-\item{min_percentile}{Minimum percentile for filtering network data, default is 0.85.}
 }
 \value{
 A spatial object representing the largest cohesive component of the network without dangles.

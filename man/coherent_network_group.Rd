@@ -17,6 +17,3 @@ A grouped sf network with ranked groups based on mean potential.
 \description{
 This function generates a coherent network grouped by edge betweenness.
 }
-\examples{
-coherent_network_group(city_network, city_zone)
-}
