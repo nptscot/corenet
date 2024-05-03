@@ -2,32 +2,72 @@
 % Please edit documentation in R/corenet.R
 \name{corenet}
 \alias{corenet}
-\title{Generate a base network for developing a cohesive cycling network}
+\title{Generating cohesive cycling network}
 \usage{
 corenet(
-  combined_network_tile,
-  network_tile,
-  combined_grid_buffer,
+  influence_network,
+  cohesive_base_network,
+  target_zone,
+  key_attribute = "all_fastest_bicycle_go_dutch",
   crs = "EPSG:27700",
-  dist = 10
+  dist = 10,
+  threshold = 1500,
+  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07)
 )
 }
 \arguments{
-\item{combined_network_tile}{The NPT network, class sf.}
+\item{influence_network}{The NPT network data, class 'sf'.}
 
-\item{network_tile}{Spatial object ob.}
+\item{cohesive_base_network}{Spatial object representing the cohesive base network obtained via function cohesive_network_prep, class 'sf'.}
 
-\item{combined_grid_buffer}{Additional spatial data, currently unused in the road_function}
+\item{target_zone}{Spatial object representing the study area or target zone, class 'sf'.}
+
+\item{key_attribute}{Attribute used to determine significant network routes, default is "all_fastest_bicycle_go_dutch".}
 
 \item{crs}{Coordinate reference system for transformation, default is "EPSG:27700".}
 
-\item{dist}{The distance threshold used in path calculations, default is 10.}
+\item{dist}{Distance threshold used in path calculations, default is 10 meters.}
+
+\item{threshold}{Value threshold for filtering significant routes, default is 1500.}
+
+\item{road_scores}{A list of road types and their corresponding scoring weights.}
 }
 \value{
-A spatial object representing the largest cohesive component of the network without dangles.
+A spatial object representing the largest cohesive component of the network, free of dangles.
 }
 \description{
-This function processes the provided network data to extract and analyze
-the most significant routes based on a percentile threshold, performs spatial operations,
-clusters data points, and calculates the largest network component without dangles.
+This function processes the provided network data to identify and analyze
+significant routes based on a percentile threshold. It performs spatial
+operations, clusters data points, and calculates the largest network component
+without dangles, aiming to develop a cohesive cycling network infrastructure.
+}
+\examples{
+library(sf)
+library(dplyr)
+library(dbscan)
+library(zonebuilder)
+
+# Load demo data 
+os_edinburgh_demo_3km = sf::st_set_crs(os_edinburgh_demo_3km, 27700)
+NPT_demo_3km = sf::st_set_crs(NPT_demo_3km, 27700)
+base_network = sf::st_transform(os_edinburgh_demo_3km, crs = 27700)
+influence_network = sf::st_transform(NPT_demo_3km, crs = 27700)
+target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 2) |>
+               sf::st_transform(crs = "EPSG:27700")
+
+# Execute the function
+OS_NPT_demo = cohesive_network_prep( base_network = base_network, 
+                                influence_network = influence_network, 
+                                target_zone = target_zone, 
+                                key_attribute = "road_function", 
+                                crs = "EPSG:27700", 
+                                attribute_values = c("A Road", "B Road", "Minor Road"))
+OS_NPT_demo$geometry = OS_NPT_demo$geom
+coherent_network = corenet(influence_network = OS_NPT_demo, 
+                  cohesive_base_network = OS_NPT_demo, 
+                  target_zone = target_zone, 
+                  key_attribute = "all_fastest_bicycle_go_dutch", 
+                  crs = "EPSG:27700", dist = 10, threshold = 1500,
+                  road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+
 }

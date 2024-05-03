@@ -6,30 +6,59 @@
 \usage{
 prepare_network(
   network,
-  A_Road = 1,
-  B_Road = 1,
-  Minor_Road = 1e+07,
+  key_attribute = "all_fastest_bicycle_go_dutch",
+  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07),
   transform_crs = 27700
 )
 }
 \arguments{
-\item{network}{An sf object representing a spatial network.}
+\item{network}{An 'sf' object representing a spatial network.}
 
-\item{A_Road}{A numeric score for A Roads, default is 1.}
+\item{key_attribute}{The attribute name from the network used for normalization and scoring, default is "all_fastest_bicycle_go_dutch".}
 
-\item{B_Road}{A numeric score for B Roads, default is 1.}
+\item{road_scores}{A list specifying scores for different road types. Example: list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000).}
 
-\item{Minor_Road}{A numeric score for Minor Roads, default is 10000000.
-Example usage
-road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100000)}
-
-\item{transform_crs}{Numeric CRS code for coordinate transformation, default is 27700.}
+\item{transform_crs}{The numeric CRS code for coordinate transformation, default is 27700.}
 }
 \value{
-An sfnetwork object with additional attributes like 'arterialness' and 'weight' based on road conditions.
+An 'sfnetwork' object with attributes 'arterialness' and 'weight' that account for road conditions and their relative importance.
 }
 \description{
-This function takes a spatial network object, casts it to LINESTRING, converts it to an sfnetwork,
-and computes scores based on road conditions and classifications. The transformation ensures that
-the network is ready for further analytical processes.
+This function transforms a spatial network object into an 'sfnetwork', scoring it based on road conditions and classifications.
+The transformation process includes casting the network to LINESTRING, converting it to 'sfnetwork', and adding attributes
+like 'arterialness' and 'weight' which are calculated based on the given road scores and the importance of the roads in the network.
+}
+\examples{
+library(sf)
+library(sfnetworks)
+library(dplyr)
+library(purrr)
+library(zonebuilder)
+
+# Load demo data 
+os_edinburgh_demo_3km = sf::st_set_crs(os_edinburgh_demo_3km, 27700)
+NPT_demo_3km = sf::st_set_crs(NPT_demo_3km, 27700)
+base_network = sf::st_transform(os_edinburgh_demo_3km, crs = 27700)
+influence_network = sf::st_transform(NPT_demo_3km, crs = 27700)
+target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 2) |>
+               sf::st_transform(crs = "EPSG:27700")
+
+# Prepare the cohesive network
+network = cohesive_network_prep(base_network = base_network, 
+                                influence_network = influence_network, 
+                                target_zone = target_zone, 
+                                key_attribute = "road_function", 
+                                attribute_values = c("A Road", "B Road", "Minor Road"))
+
+# Define road scores
+road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100000)
+
+# Prepare the network
+prepared_network = prepare_network(network, 
+                                    key_attribute = "all_fastest_bicycle_go_dutch",
+                                    road_scores = road_scores,
+                                    transform_crs = 27700)
+
+# Print the prepared network
+print(prepared_network)
 }

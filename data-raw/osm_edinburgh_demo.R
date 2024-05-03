@@ -5,6 +5,7 @@ library(tidyverse)
 library(osmactive)
 library(zonebuilder)
 library(sf)
+library(dplyr)
 
 # Install required GitHub package if not already installed
 if (!requireNamespace("remotes", quietly = TRUE)) {
@@ -25,6 +26,13 @@ edinburgh_6km = edinburgh |>
   sf::st_union() |>
   sf::st_transform(27700)
 
+# Remove CRS info to avoid warning with non ascii characters:
+sf::st_crs(edinburgh_3km) = NA
+usethis::use_data(edinburgh_3km, overwrite = TRUE)
+
+sf::st_crs(edinburgh_6km) = NA
+usethis::use_data(edinburgh_6km, overwrite = TRUE)
+
 # Get Open Roads data
 if (!file.exists("srn.gpkg")) {
   message("Missing the SRN dataset locally, download it from the DfT or releases")
@@ -37,7 +45,7 @@ if (!file.exists("srn.gpkg")) {
   # for filter:             "SELECT name_1 as name, geometry FROM road_link WHERE trunk_road"
   # q = "SELECT name_1 as name, geometry FROM road_link WHERE trunk_road"
   # srn = sf::read_sf("Data/oproad_gb.gpkg", query = q) # failed:
-  open_roads_national = sf::read_sf("Data/oproad_gb.gpkg", layer = "road_link")
+  open_roads_national = sf::read_sf("inputdata/oproad_gb.gpkg", layer = "road_link")
   names(open_roads_national)
   #    [1] "id"                         "fictitious"
   #  [3] "road_classification"        "road_function"
@@ -91,10 +99,10 @@ os_edinburgh_demo_6km = sf::read_sf("open_roads_edinburgh_6km.gpkg")|>
   sf::st_transform(27700)
 
 # Remove CRS info to avoid warning with non ascii characters:
-sf::st_crs(os_edinburgh_demo_3km) = NA
+sf::st_crs(open_roads_edinburgh_3km) = NA
 usethis::use_data(os_edinburgh_demo_3km, overwrite = TRUE)
 
-sf::st_crs(os_edinburgh_demo_6km) = NA
+sf::st_crs(open_roads_edinburgh_3km) = NA
 usethis::use_data(os_edinburgh_demo_6km, overwrite = TRUE)
 # Let's see how big the file is:
 fs::file_size("data/os_edinburgh_demo_3km.rda")

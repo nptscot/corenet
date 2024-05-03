@@ -4,10 +4,10 @@
 \alias{removeDangles}
 \title{Remove dangling segments from a road network}
 \usage{
-removeDangles(road_network, tolerance = 0.001)
+removeDangles(network, tolerance = 0.001)
 }
 \arguments{
-\item{road_network}{An \code{sf} object of class LINESTRING representing the road network.}
+\item{network}{An \code{sf} object of class LINESTRING representing the road network.}
 
 \item{tolerance}{The distance tolerance for identifying isolated endpoints as dangling.}
 }

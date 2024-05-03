@@ -57,7 +57,8 @@ devtools::check()
 # devtools::release()
 ```
 
-The goal of corenet is to provide a set of functions to generate 'core' route networks for transport planning.
+`corenet` aims to provide a suite of functions designed to generate coherent networks for cycling, primarily for Scottish, but it can also be adapted for other regions or purposes, such as walking. 
+`corenet` utilizes NPT data (www.npt.scot) as a key influencing parameter to facilitate the creation of these networks. Open road network (https://www.ordnancesurvey.co.uk/products/os-open-roads) serves as the base layer for the coherent network, chosen for its simplicity.
 
 Install it with:
 
@@ -67,6 +68,7 @@ if (!require("remotes")) {
 }
 remotes::install_github("nptscot/corenet")
 ```
+
 Load the package with the following for local development:
 
 ```{r, include=FALSE}
@@ -77,84 +79,48 @@ devtools::load_all()
 
 The package comes with example data for testing functions.
 You can test the functions as follows:
-
 ```{r}
-zones = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")
-
-# load NPT data
-combined_network_tile_path = "inputdata/combined_network_tile.geojson"
-combined_network_tile = sf::read_sf(combined_network_tile_path) |> sf::st_transform(crs = "EPSG:27700") |>
-    dplyr::select(all_fastest_bicycle_go_dutch, geometry)
-
-mini_NPT = combined_network_tile[sf::st_union(zones), , op = sf::st_intersects]
-
-# save the mini_NPT to geosjon
-# sf::st_write(mini_NPT, "data/Minimal_NPT.geojson", delete_dsn = TRUE)
-
-# load OS data
-open_roads_national = sf::read_sf("inputdata/oproad_gb.gpkg", layer = "road_link") |> 
-              sf::st_transform(crs)
- 
-mini_OS = open_roads_national[sf::st_union(zones), , op = sf::st_intersects] |>
-    dplyr::select(road_function, geometry)
-
-# save the mini_OS to geosjon
-# sf::st_write(mini_OS, "data/Minimal_OS.geojson", driver = "GeoJSON")
-```
-
-Demo of the corenet function:
-```{r}
-library(dplyr) 
-library(mapview)
-
-devtools::load_all()
-parameters = jsonlite::read_json("parameters.json", simplifyVector = T)
-
-# Specify the parameters 
-region = "Edinburgh and Lothians"
-parameters$region = region
-parameters$coherent_area = "City of Edinburgh"
-```
-
-```{r}
-combined_network_tile_path = "inputdata/combined_network_tile.geojson"
-influence_network = sf::read_sf(combined_network_tile_path) |> sf::st_transform(crs = "EPSG:27700")
-
-base_network = sf::read_sf("inputdata/oproad_gb.gpkg", layer = "road_link") |> 
-                   sf::st_transform("EPSG:27700")
-
 target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")
+sf::st_crs(NPT_demo_6km) = 27700
+sf::st_crs(os_edinburgh_demo_6km) = 27700
+```
 
-st_crs(OS_NPT_demo_6km) = 27700
-st_crs(os_edinburgh_demo_6km) = 27700
-NPT_MM_OSM = cohesive_network_prep(base_network = os_edinburgh_demo_6km, influence_network = OS_NPT_demo_6km, target_zone, crs = "EPSG:27700", key_attribute = "road_function", attribute_values = c("A Road", "B Road", "Minor Road"))
-names(os_edinburgh_demo_6km)
-mapview(NPT_MM_OSM)
-
-prepared_network = prepare_network(NPT_MM_OSM, key_attribute = "all_fastest_bicycle_go_dutch", road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), transform_crs = 27700) 
-
-
-CN_network = corenet(influence_network, NPT_MM_OSM, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", dist = 10, threshold = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+```{r}
+# Prepare the network for analysis
+OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km, 
+                                     influence_network = NPT_demo_6km, 
+                                     target_zone, 
+                                     crs = "EPSG:27700", 
+                                     key_attribute = "road_function", 
+                                     attribute_values = c("A Road", "B Road", "Minor Road"))
 
 ```
 
+```{r}
+# The prepare_network function is invoked within the corenet function; this line allows us to examine it separately.
+prepared_network = prepare_network(OS_NPT_demo, 
+                                    key_attribute = "all_fastest_bicycle_go_dutch", 
+                                    road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), 
+                                    transform_crs = 27700)
+```
 
-  # Check for specified areas in the 'coherent_area' parameter
-  if (!is.null(parameters$coherent_area) && length(parameters$coherent_area) > 0) {
+```{r}
+#rename NPT_MM_OSM$geom as NPT_MM_OSM$geometry
+OS_NPT_demo$geometry = OS_NPT_demo$geom
 
-    # Process each specified area
-    for (area in parameters$coherent_area) {
-      area_filename = gsub(" ", "_", area)
-      print(paste("Preparing the network data for the", area))
-      combined_network_tile = sf::st_transform(combined_network_tile, crs)
+# Generate the coherent network for cycling.
+CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
+                      key_attribute = "all_fastest_bicycle_go_dutch", 
+                      crs = "EPSG:27700", dist = 10, threshold = 1500, 
+                      road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
 
-      # Read spatial data and filter for the specific area with transformation and buffering
-      sg_intermediatezone_bdry_2011 = sf::st_read("inputdata/sg_intermediatezone_bdry_2011.gpkg") |> sf::st_transform(crs = crs)
-      las_scotland_2023 = sf::st_read("inputdata/las_scotland_2023.geojson") |>
-                           sf::st_transform(crs = crs) |>
-                           dplyr::filter(LAD23NM == area) |>
-                           sf::st_buffer(dist = 4000)
+mapview::mapview(CN_network)
+```
 
-      # Calculate zones within the specified buffer area
-      zones = sg_intermediatezone_bdry_2011[sf::st_union(las_scotland_2023), , op = sf::st_within]
-      zones$density = zones$TotPop2011 / zones$StdAreaHa  
+Group the coherent network
+
+```{r}
+grouped_network = coherent_network_group(CN_network, key_attribute = "all_fastest_bicycle_go_dutch")
+
+mapview::mapview(grouped_network, zcol = "group", color = viridis::viridis(12), legend = TRUE)
+```

@@ -25,7 +25,11 @@ Imports:
     stplanr,
     dbscan,
     purrr,
-    units
+    units,
+    rlang,
+    zonebuilder,
+    tmaptools,
+    rsgeo
 Suggests: 
     tibble
 Encoding: UTF-8

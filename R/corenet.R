@@ -2,15 +2,46 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute"))
 
-#' This function prepare the base netwrok for generating cohesive cycling network using NPT data.
+#' Prepare a cohesive cycling network using NPT data
 #'
-#' @param influence_network NPT road network object, class sf.
+#' This function prepares the base network for generating a cohesive cycling network 
+#' using NPT data. It integrates two different road network data sources within a specified 
+#' target zone to produce a cohesive cycling network that considers specific road attributes.
+#'
+#' @param base_network Base road network object from Open Road, class 'sf'.
+#' @param influence_network NPT road network object, which contains influence factors 
+#'        like all_fastest_bicycle_go_dutch, class 'sf'.
+#' @param target_zone Target zone, a polygon of a study area, such as a 3km radius around 
+#'        Edinburgh city centre, class 'sf'.
 #' @param crs Coordinate reference system to use, default is "EPSG:27700".
-#' @param parameters A list containing specific parameters like 'coherent_area'.
-#' @return A list of two elements: a cohesive network and zone data, both as sf objects.
+#' @param key_attribute The attribute in the network data to filter by and influence the outcome.
+#' @param attribute_values Values of the key_attribute to retain in the network.
+#' @return A list containing two elements: a cohesive network and zone data, both class 'sf'.
 #' @export
+#' @examples
+#' library(sf)
+#' library(zonebuilder)
+#' library(dplyr)
+#' library(tmaptools)
+#'
+#' # Load demo data 
+#' os_edinburgh_demo_3km = sf::st_set_crs(os_edinburgh_demo_3km, 27700)
+#' NPT_demo_3km = sf::st_set_crs(NPT_demo_3km, 27700)
+#' base_network = sf::st_transform(os_edinburgh_demo_3km, crs = 27700)
+#' influence_network = sf::st_transform(NPT_demo_3km, crs = 27700)
+#' target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 2) |>
+#'                sf::st_transform(crs = "EPSG:27700")
+#'
+#' # Prepare the cohesive network
+#' OS_NPT_demo = cohesive_network_prep( base_network = base_network, 
+#'                                 influence_network = influence_network, 
+#'                                 target_zone = target_zone, 
+#'                                 key_attribute = "road_function", 
+#'                                 crs = "EPSG:27700", 
+#'                                 attribute_values = c("A Road", "B Road", "Minor Road"))
+#'
 
 
 cohesive_network_prep = function(base_network, influence_network, target_zone, crs = "EPSG:27700",  key_attribute = "road_function", attribute_values = c("A Road", "B Road", "Minor Road")) {
@@ -47,29 +78,63 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
     # Merge road networks with specified parameters
     filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 15, funs = funs, segment_length = 20,max_angle_diff = 10)
 
-  print(paste("Finished preparing the network data"))
+  print("Finished preparing the network data")
   
   return(filtered_OS_NPT_zones)
 }
 
 
-#' Generate a base network for developing a cohesive cycling network
+#' Generating cohesive cycling network
 #'
-#' This function processes the provided network data to extract and analyze
-#' the most significant routes based on a percentile threshold, performs spatial operations,
-#' clusters data points, and calculates the largest network component without dangles.
-#' @param influence_network The NPT network, class sf.
-#' @param network Spatial object ob.
-#' @param combined_grid_buffer Additional spatial data, currently unused in the road_function
+#' This function processes the provided network data to identify and analyze 
+#' significant routes based on a percentile threshold. It performs spatial 
+#' operations, clusters data points, and calculates the largest network component 
+#' without dangles, aiming to develop a cohesive cycling network infrastructure.
+#'
+#' @param influence_network The NPT network data, class 'sf'.
+#' @param cohesive_base_network Spatial object representing the cohesive base network obtained via function cohesive_network_prep, class 'sf'.
+#' @param target_zone Spatial object representing the study area or target zone, class 'sf'.
+#' @param key_attribute Attribute used to determine significant network routes, default is "all_fastest_bicycle_go_dutch".
 #' @param crs Coordinate reference system for transformation, default is "EPSG:27700".
-#' @param dist The distance threshold used in path calculations, default is 10.
-#' @return A spatial object representing the largest cohesive component of the network without dangles.
+#' @param dist Distance threshold used in path calculations, default is 10 meters.
+#' @param threshold Value threshold for filtering significant routes, default is 1500.
+#' @param road_scores A list of road types and their corresponding scoring weights.
+#' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
+#' @examples
+#' library(sf)
+#' library(dplyr)
+#' library(dbscan)
+#' library(zonebuilder)
+#'
+#' # Load demo data 
+#' os_edinburgh_demo_3km = sf::st_set_crs(os_edinburgh_demo_3km, 27700)
+#' NPT_demo_3km = sf::st_set_crs(NPT_demo_3km, 27700)
+#' base_network = sf::st_transform(os_edinburgh_demo_3km, crs = 27700)
+#' influence_network = sf::st_transform(NPT_demo_3km, crs = 27700)
+#' target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 2) |>
+#'                sf::st_transform(crs = "EPSG:27700")
+#'
+#' # Execute the function
+#' OS_NPT_demo = cohesive_network_prep( base_network = base_network, 
+#'                                 influence_network = influence_network, 
+#'                                 target_zone = target_zone, 
+#'                                 key_attribute = "road_function", 
+#'                                 crs = "EPSG:27700", 
+#'                                 attribute_values = c("A Road", "B Road", "Minor Road"))
+#' OS_NPT_demo$geometry = OS_NPT_demo$geom
+#' coherent_network = corenet(influence_network = OS_NPT_demo, 
+#'                   cohesive_base_network = OS_NPT_demo, 
+#'                   target_zone = target_zone, 
+#'                   key_attribute = "all_fastest_bicycle_go_dutch", 
+#'                   crs = "EPSG:27700", dist = 10, threshold = 1500,
+#'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+#'
 
 
 corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", dist = 10, threshold = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000)) {
 
-  if (key_attribute %in% names(cohesive_base_network)) {
+  if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
     influence_network = sf::st_transform(influence_network, crs)
     influence_network_split = stplanr::line_segment(influence_network, segment_length = 20, use_rsgeo = TRUE)
@@ -87,68 +152,69 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
     unique_centroids = centroids[!duplicated(centroids$cluster), ]    
 
   } else {
-    grid_sf = target_zone
+    warning(paste0("Warning: ", key_attribute, " does not exist in the network"))
+    # grid_sf = target_zone
 
-    grid_sf$grid_id = seq_len(nrow(grid_sf))
+    # grid_sf$grid_id = seq_len(nrow(grid_sf))
 
-    split_network = sf::st_intersection(influence_network, grid_sf)
+    # split_network = sf::st_intersection(influence_network, grid_sf)
 
-    select_by_density = function(density) {
-      if (density < 10) {
-        top_n = 1
-      } else if (density >= 10 & density < 20) {
-        top_n = 5
-      } else {
-        top_n = (density %/% 10) + 12
-      }
+    # select_by_density = function(density) {
+    #   if (density < 10) {
+    #     top_n = 1
+    #   } else if (density >= 10 & density < 20) {
+    #     top_n = 5
+    #   } else {
+    #     top_n = (density %/% 10) + 12
+    #   }
       
-      # Check if the value is NA (rest of the cases) and set top_n to 1
-      if (is.na(density)) {
-        top_n = 1
-      }
-      return(top_n)
-    }
+    #   # Check if the value is NA (rest of the cases) and set top_n to 1
+    #   if (is.na(density)) {
+    #     top_n = 1
+    #   }
+    #   return(top_n)
+    # }
 
-    distance_threshold = units::set_units(dist, "m") # Adjust the distance as needed
+    # distance_threshold = units::set_units(dist, "m") # Adjust the distance as needed
 
-    split_network = split_network |>
-      dplyr::group_by(grid_id) |>
-      dplyr::mutate(top_n = select_by_density(unique(density)))
+    # split_network = split_network |>
+    #   dplyr::group_by(grid_id) |>
+    #   dplyr::mutate(top_n = select_by_density(unique(density)))
 
 
-    split_network_max = split_network |>
-      dplyr::group_by(grid_id) |>
-      dplyr::group_modify(~ {
-        # Step 1: Filter for the current grid_id
-        split_network_filtered = .x
+    # split_network_max = split_network |>
+    #   dplyr::group_by(grid_id) |>
+    #   dplyr::group_modify(~ {
+    #     # Step 1: Filter for the current grid_id
+    #     split_network_filtered = .x
         
-        # Step 2: Calculate Centroids for These Elements
-        centroids = sf::st_centroid(split_network_filtered)
+    #     # Step 2: Calculate Centroids for These Elements
+    #     centroids = sf::st_centroid(split_network_filtered)
         
-        # Step 3: Sort the Centroids Based on a Value Attribute
-        sorted_centroids = centroids |>
-          dplyr::arrange(desc(value))
+    #     # Step 3: Sort the Centroids Based on a Value Attribute
+    #     sorted_centroids = centroids |>
+    #       dplyr::arrange(desc(value))
         
-        # Step 4: Identify the Centroid with the Highest Value
-        highest_value_centroid = sorted_centroids[1, ]
+    #     # Step 4: Identify the Centroid with the Highest Value
+    #     highest_value_centroid = sorted_centroids[1, ]
         
-        # Step 5: Calculate Distances from Each Centroid to the Highest Value Centroid
-        distances_to_highest = sf::st_distance(centroids, highest_value_centroid)
+    #     # Step 5: Calculate Distances from Each Centroid to the Highest Value Centroid
+    #     distances_to_highest = sf::st_distance(centroids, highest_value_centroid)
 
-        # Step 6: Select Line Strings Based on top_n and Distance Criteria
-        top_n = unique(split_network_filtered$top_n)
+    #     # Step 6: Select Line Strings Based on top_n and Distance Criteria
+    #     top_n = unique(split_network_filtered$top_n)
 
-        selected_lines = split_network_filtered |>
-          dplyr::mutate(distance_to_highest = sf::st_distance(centroids, highest_value_centroid)[,1]) |>
-          dplyr::filter(distance_to_highest >= distance_threshold) |>
-          dplyr::slice_head(n = top_n)        
-        return(selected_lines)
-      }) |> 
-      dplyr::bind_rows()
+    #     selected_lines = split_network_filtered |>
+    #       dplyr::mutate(distance_to_highest = sf::st_distance(centroids, highest_value_centroid)[,1]) |>
+    #       dplyr::filter(distance_to_highest >= distance_threshold) |>
+    #       dplyr::slice_head(n = top_n)        
+    #     return(selected_lines)
+    #   }) |> 
+    #   dplyr::bind_rows()
 
-    # Calculate centroids of these max segments
-    split_network_max = sf::st_as_sf(split_network_max)
-    unique_centroids = sf::st_centroid(split_network_max)
+    # # Calculate centroids of these max segments
+    # split_network_max = sf::st_as_sf(split_network_max)
+    # unique_centroids = sf::st_centroid(split_network_max)
   }
 
   # Prepare network and calculate paths
@@ -177,56 +243,95 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 }
 
 
-#' This function generates a coherent network grouped by edge betweenness.
+#' Generate a grouped network by edge betweenness from a preprocessed coherent network
 #'
-#' @param CITY The road network for the city, expected to be an sf object.
-#' @param ZONE Combined grid buffer, presumably an area of interest within the city, also an sf object.
-#' @return A grouped sf network with ranked groups based on mean potential.
+#' This function takes a preprocessed network and applies graph-based analysis to group
+#' the network edges based on their betweenness centrality. The function assumes that
+#' the input network has attributes relevant to cycling traffic dynamics, specifically
+#' 'all_fastest_bicycle_go_dutch' and 'weight'. It outputs a transformed network where
+#' edges are grouped and ranked according to their mean potential, facilitating further
+#' analysis or visualization of critical network pathways.
+#'
+#' @param coherent_network A preprocessed 'sf' object containing the network data,
+#'        expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.
+#' @param key_attribute The attribute used to keep.
+#' 
+#' @return An 'sf' object with edges grouped and ranked based on their mean potential.
+#'
+#' # Assuming 'coherent_network' is obtained from a previous function corenet
+#' # Generate the grouped network
+#' grouped_network = coherent_network_group(coherent_network)
+#'
 #' @export
 
+coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch") {
+  # Assume coherent_network is already a preprocessed sf object
+  rnet_coherent_selected = coherent_network |>
+    dplyr::select(key_attribute, weight)
 
-coherent_network_group = function(CITY, ZONE) {
-  # library(tidygraph)
-  # Generate coherent network
-  rnet_coherent = corenet(influence_network, network = CITY, combined_grid_buffer = ZONE)
-  
-  # Select relevant columns
-  rnet_coherent_selected = rnet_coherent |>
-    dplyr::select(all_fastest_bicycle_go_dutch, weight)
-  
-  # Group and process the network
+  # Group and process the network using graph-theoretic methods
   grouped_net = rnet_coherent_selected |>
     sfnetworks::as_sfnetwork(directed = FALSE) |>
-    tidygraph::morph(tidygraph::to_linegraph) |>
+    # tidygraph::morph(tidygraph::to_linegraph()) |>
     dplyr::mutate(group = tidygraph::group_edge_betweenness(n_groups = 12)) |>
     tidygraph::unmorph() |>
-    tidygraph::activate(edges) |>
+    tidygraph::activate("edges") |>
     sf::st_as_sf() |>
     sf::st_transform("EPSG:4326") |>
     dplyr::group_by(group) |>
     dplyr::summarise(mean_potential = mean(weight, na.rm = TRUE)) |>
     dplyr::mutate(group = rank(-mean_potential))
-  
+
   # Return the processed network
   return(grouped_net)
 }
 
-
-
 #' Prepare a network data structure by transforming, scoring, and weighting based on road types and conditions
 #'
-#' This function takes a spatial network object, casts it to LINESTRING, converts it to an sfnetwork,
-#' and computes scores based on road conditions and classifications. The transformation ensures that
-#' the network is ready for further analytical processes.
+#' This function transforms a spatial network object into an 'sfnetwork', scoring it based on road conditions and classifications.
+#' The transformation process includes casting the network to LINESTRING, converting it to 'sfnetwork', and adding attributes
+#' like 'arterialness' and 'weight' which are calculated based on the given road scores and the importance of the roads in the network.
 #'
-#' @param network An sf object representing a spatial network.
-#' @param A_Road A numeric score for A Roads, default is 1.
-#' @param B_Road A numeric score for B Roads, default is 1.
-#' @param Minor_Road A numeric score for Minor Roads, default is 10000000.
-#' Example usage
+#' @param network An 'sf' object representing a spatial network.
+#' @param key_attribute The attribute name from the network used for normalization and scoring, default is "all_fastest_bicycle_go_dutch".
+#' @param road_scores A list specifying scores for different road types. Example: list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000).
+#' @param transform_crs The numeric CRS code for coordinate transformation, default is 27700.
+#' @return An 'sfnetwork' object with attributes 'arterialness' and 'weight' that account for road conditions and their relative importance.
+#' @examples
+#' library(sf)
+#' library(sfnetworks)
+#' library(dplyr)
+#' library(purrr)
+#' library(zonebuilder)
+#'
+#' # Load demo data 
+#' os_edinburgh_demo_3km = sf::st_set_crs(os_edinburgh_demo_3km, 27700)
+#' NPT_demo_3km = sf::st_set_crs(NPT_demo_3km, 27700)
+#' base_network = sf::st_transform(os_edinburgh_demo_3km, crs = 27700)
+#' influence_network = sf::st_transform(NPT_demo_3km, crs = 27700)
+#' target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 2) |>
+#'                sf::st_transform(crs = "EPSG:27700")
+#'
+#' # Prepare the cohesive network
+#' network = cohesive_network_prep(base_network = base_network, 
+#'                                 influence_network = influence_network, 
+#'                                 target_zone = target_zone, 
+#'                                 key_attribute = "road_function", 
+#'                                 attribute_values = c("A Road", "B Road", "Minor Road"))
+#'
+#' # Define road scores
 #' road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100000)
-#' @param transform_crs Numeric CRS code for coordinate transformation, default is 27700.
-#' @return An sfnetwork object with additional attributes like 'arterialness' and 'weight' based on road conditions.
+#'
+#' # Prepare the network
+#' prepared_network = prepare_network(network, 
+#'                                     key_attribute = "all_fastest_bicycle_go_dutch",
+#'                                     road_scores = road_scores,
+#'                                     transform_crs = 27700)
+#'
+#' # Print the prepared network
+#' print(prepared_network)
+#' @export
+
 prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutch", 
                            road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000),
                            transform_crs = 27700) {
@@ -260,6 +365,8 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 
     return(network)
 }
+
+
 #' Calculate paths from a given point to centroids within a specified distance range
 #'
 #' This function determines the network paths from a specific point to multiple centroids based on distance thresholds,
@@ -271,7 +378,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @param centroids An sf object containing centroids to which paths are calculated.
 #' @param shortest Logical indicating whether the shortest paths are calculated (TRUE) or weighted paths (FALSE).
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
-
+#' @export
 
 calculate_paths_from_point_dist = function(network, point, dist = 500, centroids, shortest = FALSE) {
     
@@ -326,6 +433,8 @@ calculate_paths_from_point_dist = function(network, point, dist = 500, centroids
 #'
 #' @param network An `sf` object representing the network to be analyzed.
 #' @return An `sfnetwork` object representing the largest connected component of the network.
+#' @export
+#' 
 calculate_largest_component = function(network) {
     # Ensure the network tile is in the correct format and convert to sfnetwork
     if (!inherits(network, "sfnetwork")) {
@@ -362,6 +471,8 @@ calculate_largest_component = function(network) {
 #' @param network An `sf` object of class LINESTRING representing the road network.
 #' @param tolerance The distance tolerance for identifying isolated endpoints as dangling.
 #' @return An `sf` object with dangling line segments removed.
+#' @export
+#' 
 removeDangles = function(network, tolerance = 0.001) {
     # Convert to Spatial Lines if not already
     network_lines = sf::st_cast(network, "LINESTRING")

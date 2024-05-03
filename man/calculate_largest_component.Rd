@@ -4,10 +4,10 @@
 \alias{calculate_largest_component}
 \title{Calculate the largest connected component of a network}
 \usage{
-calculate_largest_component(network_tile)
+calculate_largest_component(network)
 }
 \arguments{
-\item{network_tile}{An \code{sf} object representing the network to be analyzed.}
+\item{network}{An \code{sf} object representing the network to be analyzed.}
 }
 \value{
 An \code{sfnetwork} object representing the largest connected component of the network.

@@ -2,18 +2,29 @@
 % Please edit documentation in R/corenet.R
 \name{coherent_network_group}
 \alias{coherent_network_group}
-\title{This function generates a coherent network grouped by edge betweenness.}
+\title{Generate a grouped network by edge betweenness from a preprocessed coherent network}
 \usage{
-coherent_network_group(CITY, ZONE)
+coherent_network_group(
+  coherent_network,
+  key_attribute = "all_fastest_bicycle_go_dutch"
+)
 }
 \arguments{
-\item{CITY}{The road network for the city, expected to be an sf object.}
+\item{coherent_network}{A preprocessed 'sf' object containing the network data,
+expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.}
 
-\item{ZONE}{Combined grid buffer, presumably an area of interest within the city, also an sf object.}
+\item{key_attribute}{The attribute used to keep.}
 }
 \value{
-A grouped sf network with ranked groups based on mean potential.
+An 'sf' object with edges grouped and ranked based on their mean potential.Assuming 'coherent_network' is obtained from a previous function corenetGenerate the grouped network
+
+grouped_network = coherent_network_group(coherent_network)
 }
 \description{
-This function generates a coherent network grouped by edge betweenness.
+This function takes a preprocessed network and applies graph-based analysis to group
+the network edges based on their betweenness centrality. The function assumes that
+the input network has attributes relevant to cycling traffic dynamics, specifically
+'all_fastest_bicycle_go_dutch' and 'weight'. It outputs a transformed network where
+edges are grouped and ranked according to their mean potential, facilitating further
+analysis or visualization of critical network pathways.
 }
