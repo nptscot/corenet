@@ -117,20 +117,44 @@ parameters$coherent_area = "City of Edinburgh"
 ```
 
 ```{r}
-combined_network_tile_path = "data/Minimal_NPT.geojson"
-combined_network_tile = sf::read_sf(combined_network_tile_path) |> sf::st_transform(crs = "EPSG:27700")
+combined_network_tile_path = "inputdata/combined_network_tile.geojson"
+influence_network = sf::read_sf(combined_network_tile_path) |> sf::st_transform(crs = "EPSG:27700")
 
-NPT_MM_OSM = cohesive_network_prep(combined_network_tile, crs = "EPSG:27700", parameters = parameters)
+base_network = sf::read_sf("inputdata/oproad_gb.gpkg", layer = "road_link") |> 
+                   sf::st_transform("EPSG:27700")
 
-NPT_MM_OSM_CITY =  NPT_MM_OSM$cohesive_network
-NPT_MM_OSM_ZONE =  NPT_MM_OSM$cohesive_zone
+target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")
 
-city = "City of Edinburgh"
-city_filename = gsub(" ", "_", city)
-CITY = NPT_MM_OSM_CITY[[city]]
-ZONE = NPT_MM_OSM_ZONE[[city]]
+st_crs(OS_NPT_demo_6km) = 27700
+st_crs(os_edinburgh_demo_6km) = 27700
+NPT_MM_OSM = cohesive_network_prep(base_network = os_edinburgh_demo_6km, influence_network = OS_NPT_demo_6km, target_zone, crs = "EPSG:27700", key_attribute = "road_function", attribute_values = c("A Road", "B Road", "Minor Road"))
+names(os_edinburgh_demo_6km)
+mapview(NPT_MM_OSM)
 
-CN_network = coherent_network_group(CITY, ZONE)
+prepared_network = prepare_network(NPT_MM_OSM, key_attribute = "all_fastest_bicycle_go_dutch", road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), transform_crs = 27700) 
 
-mapview::mapview(CN_network)
+
+CN_network = corenet(influence_network, NPT_MM_OSM, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", dist = 10, threshold = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+
 ```
+
+
+  # Check for specified areas in the 'coherent_area' parameter
+  if (!is.null(parameters$coherent_area) && length(parameters$coherent_area) > 0) {
+
+    # Process each specified area
+    for (area in parameters$coherent_area) {
+      area_filename = gsub(" ", "_", area)
+      print(paste("Preparing the network data for the", area))
+      combined_network_tile = sf::st_transform(combined_network_tile, crs)
+
+      # Read spatial data and filter for the specific area with transformation and buffering
+      sg_intermediatezone_bdry_2011 = sf::st_read("inputdata/sg_intermediatezone_bdry_2011.gpkg") |> sf::st_transform(crs = crs)
+      las_scotland_2023 = sf::st_read("inputdata/las_scotland_2023.geojson") |>
+                           sf::st_transform(crs = crs) |>
+                           dplyr::filter(LAD23NM == area) |>
+                           sf::st_buffer(dist = 4000)
+
+      # Calculate zones within the specified buffer area
+      zones = sg_intermediatezone_bdry_2011[sf::st_union(las_scotland_2023), , op = sf::st_within]
+      zones$density = zones$TotPop2011 / zones$StdAreaHa  
