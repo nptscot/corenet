@@ -17,7 +17,19 @@ URL: https://nptscot.github.io/corenet/
 Depends: 
     R (>= 2.10)
 Imports: 
-    sf
+    sf,
+    dplyr,
+    tidygraph,
+    igraph,
+    sfnetworks,
+    stplanr,
+    dbscan,
+    purrr,
+    units,
+    rlang,
+    zonebuilder,
+    tmaptools,
+    rsgeo
 Suggests: 
     tibble
 Encoding: UTF-8
