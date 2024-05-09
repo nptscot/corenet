@@ -16,15 +16,42 @@
     <loc>https://nptscot.github.io/corenet/index.html</loc>
   </url>
   <url>
+    <loc>https://nptscot.github.io/corenet/reference/NPT_demo_3km.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/NPT_demo_6km.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/calculate_largest_component.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/calculate_paths_from_point_dist.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/coherent_network_group.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/cohesive_network_prep.html</loc>
+  </url>
+  <url>
     <loc>https://nptscot.github.io/corenet/reference/corenet.html</loc>
   </url>
   <url>
-    <loc>https://nptscot.github.io/corenet/reference/get_edinburgh_6km.html</loc>
+    <loc>https://nptscot.github.io/corenet/reference/create_coherent_network_PMtiles.html</loc>
   </url>
   <url>
     <loc>https://nptscot.github.io/corenet/reference/index.html</loc>
   </url>
   <url>
-    <loc>https://nptscot.github.io/corenet/reference/os_edinburgh_demo.html</loc>
+    <loc>https://nptscot.github.io/corenet/reference/os_edinburgh_demo_3km.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/os_edinburgh_demo_6km.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/prepare_network.html</loc>
+  </url>
+  <url>
+    <loc>https://nptscot.github.io/corenet/reference/removeDangles.html</loc>
   </url>
 </urlset>
