@@ -1,10 +1,4 @@
 docs
-Data
 Doc
 *.zip
 *.gpkg
-inputdata/
-data/Minimal_NPT.geojson
-data/Minimal_OS.geojson
-parameters.json
-.devcontainer/

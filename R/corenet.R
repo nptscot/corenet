@@ -267,15 +267,15 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch") {
   # Assume coherent_network is already a preprocessed sf object
   rnet_coherent_selected = coherent_network |>
-    dplyr::select(key_attribute, weight)
-
-  # Group and process the network using graph-theoretic methods
+    dplyr::select(all_fastest_bicycle_go_dutch, weight)
+  
+  # Group and process the network
   grouped_net = rnet_coherent_selected |>
     sfnetworks::as_sfnetwork(directed = FALSE) |>
-    # tidygraph::morph(tidygraph::to_linegraph()) |>
+    tidygraph::morph(tidygraph::to_linegraph) |>
     dplyr::mutate(group = tidygraph::group_edge_betweenness(n_groups = 12)) |>
     tidygraph::unmorph() |>
-    tidygraph::activate("edges") |>
+    tidygraph::activate(edges) |>
     sf::st_as_sf() |>
     sf::st_transform("EPSG:4326") |>
     dplyr::group_by(group) |>
@@ -285,6 +285,8 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
   # Return the processed network
   return(grouped_net)
 }
+
+
 
 #' Prepare a network data structure by transforming, scoring, and weighting based on road types and conditions
 #'
@@ -501,3 +503,40 @@ removeDangles = function(network, tolerance = 0.001) {
 
 
 
+#' Create coherent network PMtiles
+#'
+#' This function generates PMtiles for coherent network GeoJSON file using the Tippecanoe tool.
+#' @param folder_path The directory path where the files will be saved.
+#' @param city_filename The base name for the output files, in this case using city name.
+#' @param cohesive_network An sf object representing the cohesive network.
+#' @return The output from the Tippecanoe command as a character vector.
+#' @export
+#' 
+create_coherent_network_PMtiles = function(folder_path, city_filename, cohesive_network) {
+  # Generate filenames for GeoJSON and pmtiles outputs
+  coherent_geojson_filename = paste0(folder_path, city_filename, "_coherent_network",  ".geojson")
+  # save coherent_geojson_filename as geojson
+  sf::st_write(cohesive_network, coherent_geojson_filename, delete_dsn = TRUE)
+  
+  coherent_pmtiles_filename = paste0(folder_path, city_filename, "_coherent_network",  ".pmtiles")
+  
+  # Construct the Tippecanoe command
+  command_tippecanoe = paste0(
+    'tippecanoe -o ', coherent_pmtiles_filename,
+    ' --name="', city_filename, '_coherent_network', '"',
+    ' --layer=cohesivenetwork',
+    ' --attribution="University of Leeds"',
+    ' --minimum-zoom=6',
+    ' --maximum-zoom=13',
+    ' --maximum-tile-bytes=5000000',
+    ' --simplification=10',
+    ' --buffer=5',
+    ' -rg',
+    ' --force ',
+    coherent_geojson_filename
+  )
+  
+  # Execute the command and capture output
+  system_output = system(command_tippecanoe, intern = TRUE)
+  return(system_output)
+}

@@ -114,7 +114,7 @@ CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
                       crs = "EPSG:27700", dist = 10, threshold = 1500, 
                       road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
 
-mapview::mapview(CN_network)
+# mapview::mapview(CN_network)
 ```
 
 Group the coherent network
@@ -122,5 +122,11 @@ Group the coherent network
 ```{r}
 grouped_network = coherent_network_group(CN_network, key_attribute = "all_fastest_bicycle_go_dutch")
 
-mapview::mapview(grouped_network, zcol = "group", color = viridis::viridis(12), legend = TRUE)
+# mapview::mapview(grouped_network, zcol = "group", color = viridis::viridis(12), legend = TRUE)
+```
+
+Convert the coherent network to PMtiles
+```{r}
+create_coherent_network_PMtiles(folder_path = "", city_filename = "test", cohesive_network = grouped_network)
+
 ```
