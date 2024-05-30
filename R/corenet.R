@@ -18,6 +18,7 @@ utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle
 #' @param crs Coordinate reference system to use, default is "EPSG:27700".
 #' @param key_attribute The attribute in the network data to filter by and influence the outcome.
 #' @param attribute_values Values of the key_attribute to retain in the network.
+#' 
 #' @return A list containing two elements: a cohesive network and zone data, both class 'sf'.
 #' @export
 #' @examples
@@ -78,7 +79,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
     # Merge road networks with specified parameters
     filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20,max_angle_diff = 10)
     filtered_OS_NPT_zones = filtered_OS_NPT_zones |>
-                            dplyr::mutate(across(where(is.numeric), as.integer))
+                            dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.integer))
   print("Finished preparing the network data")
   
   return(filtered_OS_NPT_zones)
@@ -256,6 +257,8 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 #' @param coherent_network A preprocessed 'sf' object containing the network data,
 #'        expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.
 #' @param key_attribute The attribute used to keep.
+#' @param n_group The number of groups to divide the network into, based on edge
+#'        betweenness centrality.
 #' 
 #' @return An 'sf' object with edges grouped and ranked based on their mean potential.
 #'

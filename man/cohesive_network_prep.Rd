@@ -10,8 +10,7 @@ cohesive_network_prep(
   target_zone,
   crs = "EPSG:27700",
   key_attribute = "road_function",
-  attribute_values = c("A Road", "B Road", "Minor Road"),
-  n_group = 12
+  attribute_values = c("A Road", "B Road", "Minor Road")
 )
 }
 \arguments{
@@ -29,8 +28,6 @@ Edinburgh city centre, class 'sf'.}
 
 \item{attribute_values}{Values of the key_attribute to retain in the network.}
 }
-\item{n_group}{Number of groups to split the network into.}
-
 \value{
 A list containing two elements: a cohesive network and zone data, both class 'sf'.
 }
