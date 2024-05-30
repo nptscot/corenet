@@ -267,7 +267,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch") {
   # Assume coherent_network is already a preprocessed sf object
   rnet_coherent_selected = coherent_network |>
-    dplyr::select(all_fastest_bicycle_go_dutch, weight)
+    dplyr::select({{ key_attribute }}, weight)
   
   # Group and process the network
   grouped_net = rnet_coherent_selected |>
