@@ -77,7 +77,8 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 
     # Merge road networks with specified parameters
     filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20,max_angle_diff = 10)
-
+    filtered_OS_NPT_zones = filtered_OS_NPT_zones |>
+                            dplyr::mutate(across(where(is.numeric), as.integer))
   print("Finished preparing the network data")
   
   return(filtered_OS_NPT_zones)
@@ -264,8 +265,8 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 #'
 #' @export
 
-coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch") {
-  # Assume coherent_network is already a preprocessed sf object
+coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch", n_group = 12) {
+
   rnet_coherent_selected = coherent_network |>
     dplyr::select({{ key_attribute }}, weight)
   
@@ -273,16 +274,16 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
   grouped_net = rnet_coherent_selected |>
     sfnetworks::as_sfnetwork(directed = FALSE) |>
     tidygraph::morph(tidygraph::to_linegraph) |>
-    dplyr::mutate(group = tidygraph::group_edge_betweenness(n_groups = 12)) |>
+    dplyr::mutate(group = tidygraph::group_edge_betweenness(n_groups = n_group)) |>
     tidygraph::unmorph() |>
     tidygraph::activate(edges) |>
     sf::st_as_sf() |>
     sf::st_transform("EPSG:4326") |>
-    dplyr::group_by(group, !!rlang::sym(key_attribute)) |>
-    dplyr::summarise(mean_potential = mean(weight, na.rm = TRUE)) |>
-    dplyr::mutate(group = rank(-mean_potential))
+    dplyr::group_by(group) |>
+    dplyr::summarise(mean_go_dutch = mean(.data[[key_attribute]], na.rm = TRUE),
+                     mean_potential = mean(weight, na.rm = TRUE)) |>
+    dplyr::mutate(group = rank(-mean_potential))  
 
-  # Return the processed network
   return(grouped_net)
 }
 
@@ -362,7 +363,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
                 }
             }),
             # Calculate weight considering the road type influence
-            weight = (1 - arterialness) * 100 * (1 + 0.1 * road_score)
+            weight = as.integer((1 - arterialness) * 100 * (1 + 0.1 * road_score))
         )
 
     return(network)
