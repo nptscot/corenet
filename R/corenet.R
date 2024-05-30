@@ -283,8 +283,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
     sf::st_as_sf() |>
     sf::st_transform("EPSG:4326") |>
     dplyr::group_by(group) |>
-    dplyr::summarise(mean_go_dutch = mean(.data[[key_attribute]], na.rm = TRUE),
-                     mean_potential = mean(weight, na.rm = TRUE)) |>
+    dplyr::summarise(mean_potential = mean(weight, na.rm = TRUE)) |>
     dplyr::mutate(group = rank(-mean_potential))  
 
   return(grouped_net)
