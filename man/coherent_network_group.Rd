@@ -6,7 +6,8 @@
 \usage{
 coherent_network_group(
   coherent_network,
-  key_attribute = "all_fastest_bicycle_go_dutch"
+  key_attribute = "all_fastest_bicycle_go_dutch",
+  n_group = 12
 )
 }
 \arguments{
@@ -14,6 +15,9 @@ coherent_network_group(
 expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.}
 
 \item{key_attribute}{The attribute used to keep.}
+
+\item{n_group}{The number of groups to divide the network into, based on edge
+betweenness centrality.}
 }
 \value{
 An 'sf' object with edges grouped and ranked based on their mean potential.Assuming 'coherent_network' is obtained from a previous function corenetGenerate the grouped network

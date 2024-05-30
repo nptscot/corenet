@@ -27,11 +27,11 @@ Imports:
     purrr,
     units,
     rlang,
-    zonebuilder,
-    tmaptools,
-    rsgeo
 Suggests: 
-    tibble
+    tibble,
+    tmaptools,
+    zonebuilder,
+    rsgeo
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
