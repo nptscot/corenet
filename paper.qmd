@@ -1,0 +1,164 @@
+---
+title: "Generating a Cohesive Cycling Network: Incorporating Transport Agency Requirements"
+bibliography: references.bib
+author: 
+  - name: Robin Lovelace
+    affiliation: Leeds Institute for Transport Studies, University of Leeds, UK
+    orcid: 0000-0001-5679-6536
+  - name: Zhao Wang
+    affiliation: Leeds Institute for Transport Studies, University of Leeds, UK
+    orcid: 0000-0002-4054-0533
+format:
+  pdf: default
+  # html: default
+number-sections: true
+execute: 
+  echo: false
+  message: false
+  warning: false
+editor: 
+  markdown: 
+    wrap: sentence
+# # Uncomment to run with Jupyter:
+# jupyter: python3
+---
+install.packages("reticulate")
+# Reproducibility {.unnumbered}
+
+<details>
+
+To reproduce this paper you need `quarto` installed.
+
+After installing the dependencies, you can reproduce the paper by running the following command in the terminal:
+
+``` bash
+quarto render paper.qmd
+```
+
+Install the dependencies by cloning the repository and running the following:
+
+``` r
+requirements_txt = readLines("requirements.txt")
+py_install(requirements_txt, pip = TRUE)
+```
+
+```{r}
+#| name: python-setup
+#| include: false
+requirements_txt = readLines("requirements.txt")
+# Check if Python is installed:
+if (!requireNamespace("reticulate")) {
+  install.packages("reticulate")
+}
+reticulate::install_python()
+# Install Python dependencies with reticulate:
+reticulate::py_install(requirements_txt, pip = TRUE)
+```
+
+
+</details>
+
+# Abstract {.unnumbered}
+
+The UK government ambition is to make cycling and walking the preferred options for shorter journeys or as part of longer trips by 2040. However, existing methodologies for developing cycling networks often fail to align with real-world cycling behaviors and policy requirements. This paper introduces an innovative approach to generating cohesive cycling networks by integrating the requirements of the National Transport Agency of Scotland. Leveraging the Network Planning Tool (NPT), which predicts relative cycling demand across Scotland, we incorporate empirical cycling data, urban infrastructure information, and direct stakeholder input to create practical, policy-aligned network models. Our methodology employs hybrid growth strategies that balance network cohesion, connectivity, and directness while adhering to national guidelines. We evaluate the proposed network against existing infrastructure, demonstrating significant improvements in coverage, utility, and policy compliance. This study offers valuable insights for urban planners and policymakers, emphasizing the importance of incorporating real-world data and policy frameworks in the development of sustainable urban cycling networks.
+
+---
+title: "Generating a Cohesive Cycling Network: Integrating Requirements from the National Transport Agency of Scotland"
+author: "Your Name"
+date: "YYYY-MM-DD"
+---
+
+# Introduction
+
+Sustainable urban transport is critical for addressing the environmental, economic, and social challenges faced by modern cities. Cycling and walking are among the most eco-friendly modes of transport, offering numerous benefits such as reducing greenhouse gas emissions, lowering traffic congestion, and improving public health. Despite these advantages, the development of effective and cohesive cycling networks has been hampered by various challenges. These include fragmented infrastructure, lack of integration with other transport modes, and insufficient alignment with user behaviors and policy frameworks.
+
+The Scottish government aims to make cycling and walking the preferred choices for shorter journeys or as part of longer trips by 2040. This ambitious target is part of a broader strategy to promote sustainable transport and reduce reliance on private vehicles. Achieving this goal requires the development of comprehensive and cohesive cycling networks that not only meet the needs of cyclists but also align with national transport policies.
+
+Current methodologies for developing cycling networks often fail to incorporate real-world cycling behaviors and policy requirements effectively. This disconnect results in networks that are underutilized or impractical. To bridge this gap, this paper introduces a novel approach to generating cohesive cycling networks that integrate the requirements of the National Transport Agency of Scotland. By leveraging the Network Planning Tool (NPT), which predicts relative cycling demand across Scotland, we aim to create network models that are both practical and policy-compliant. Our objectives are to:
+
+- Develop a methodology that integrates empirical cycling data, urban infrastructure information, and policy requirements.
+  
+- Employ hybrid growth strategies to optimize network cohesion, connectivity, and directness.
+Evaluate the proposed network against existing infrastructure to demonstrate improvements in coverage, utility, and policy compliance.
+
+-Provide actionable insights for urban planners and policymakers to support the development of sustainable urban cycling networks.
+
+# Literature Review
+
+## Existing Approaches to Cycling Network Development
+Review of past studies and methodologies.
+Analysis of their limitations.
+
+## Influence of National and Regional Guidelines
+Examination of how national policies shape urban transport planning.
+
+## Case Studies
+Successful examples of cohesive cycling networks from other regions.
+
+# Methodology
+
+## Data Collection
+Real-world cycling data (e.g., GPS data, usage surveys).
+Urban infrastructure data (e.g., street widths, existing bike lanes).
+Policy requirements from the National Transport Agency of Scotland.
+
+## Network Planning Tool (NPT)
+Description of the NPT and its role in predicting cycling demand.
+
+## Stakeholder Engagement
+Methods for involving policymakers, urban planners, and the cycling community.
+
+## Network Generation Process
+Seed point selection criteria.
+Growth strategies (hybrid approaches balancing cohesion, connectivity, and directness).
+Modeling tools and algorithms used.
+
+## Evaluation Metrics
+Metrics for assessing the proposed network's cohesion, coverage, connectivity, directness, and practicality.
+
+# Results
+
+## Initial Network Design
+Presentation of the initial network model generated.
+
+## Alignment with Policy Requirements
+Analysis of how the network meets the requirements set by the National Transport Agency of Scotland.
+
+## Comparison with Existing Infrastructure
+Evaluation of the proposed network against current cycling infrastructure.
+Highlighting improvements and identifying gaps.
+
+## Stakeholder Feedback
+Summary of feedback from stakeholders and how it influenced the final network design.
+
+# Discussion
+
+## Implications for Urban Transport Planning
+How the proposed methodology can be applied in other urban contexts.
+Importance of integrating empirical data and policy requirements.
+
+## Challenges and Limitations
+Discussion of challenges encountered and limitations of the study.
+
+## Future Work
+Recommendations for further research and methodological improvements.
+
+# Conclusion
+
+Recap of the study's objectives, methodology, key findings, and implications.
+Final thoughts on the importance of creating cohesive, policy-aligned cycling networks for sustainable urban transport.
+
+# References
+Comprehensive list of all references cited in the paper, formatted according to the chosen citation style.
+
+# Appendices
+
+## Appendix A: Detailed Policy Requirements
+Full text or detailed summary of the relevant requirements from the National Transport Agency of Scotland.
+
+## Appendix B: Data Sources
+List of data sources used in the study, including descriptions and access information.
+
+## Appendix C: Additional Figures and Tables
+Supplementary figures, tables, or charts that provide additional context or support the findings.
+
