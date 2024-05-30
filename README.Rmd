@@ -81,18 +81,18 @@ The package comes with example data for testing functions.
 You can test the functions as follows:
 ```{r}
 target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")
-sf::st_crs(NPT_demo_6km) = 27700
-sf::st_crs(os_edinburgh_demo_6km) = 27700
+sf::st_crs(NPT_demo_3km) = 27700
+sf::st_crs(os_edinburgh_demo_3km) = 27700
 ```
 
 ```{r}
 # Prepare the network for analysis
-OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km, 
-                                     influence_network = NPT_demo_6km, 
+OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_3km, 
+                                     influence_network = NPT_demo_3km, 
                                      target_zone, 
                                      crs = "EPSG:27700", 
                                      key_attribute = "road_function", 
-                                     attribute_values = c("A Road", "B Road", "Minor Road"))
+                                     attribute_values = c("A Road", "B Road", "Minor Road"))                       
 ```
 
 ```{r}
@@ -100,7 +100,7 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
 prepared_network = prepare_network(OS_NPT_demo, 
                                     key_attribute = "all_fastest_bicycle_go_dutch", 
                                     road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), 
-                                    transform_crs = 27700)
+                                    transform_crs = 27700)      
 ```
 
 ```{r}
@@ -108,11 +108,10 @@ prepared_network = prepare_network(OS_NPT_demo,
 OS_NPT_demo$geometry = OS_NPT_demo$geom
 
 # Generate the coherent network for cycling.
-CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
+CN_network = corenet(NPT_demo_3km, OS_NPT_demo, target_zone, 
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", dist = 10, threshold = 1500, 
                       road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
-# mapview::mapview(CN_network)
 ```
 
 Group the coherent network

@@ -77,7 +77,9 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 
     # Merge road networks with specified parameters
     filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20,max_angle_diff = 10)
-
+    # convert all numerical column values in filtered_OS_NPT_zones as integer
+    filtered_OS_NPT_zones = filtered_OS_NPT_zones |>
+                            dplyr::mutate(across(where(is.numeric), as.integer))
   print("Finished preparing the network data")
   
   return(filtered_OS_NPT_zones)
@@ -278,13 +280,15 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
     tidygraph::activate(edges) |>
     sf::st_as_sf() |>
     sf::st_transform("EPSG:4326") |>
-    dplyr::group_by(group, !!rlang::sym(key_attribute)) |>
-    dplyr::summarise(mean_potential = mean(weight, na.rm = TRUE)) |>
-    dplyr::mutate(group = rank(-mean_potential))
+    dplyr::group_by(group) |>
+    dplyr::summarise(mean_go_dutch = mean(.data[[key_attribute]], na.rm = TRUE),
+                     mean_potential = mean(weight, na.rm = TRUE)) |>
+    dplyr::mutate(group = rank(-mean_potential))  # rank groups based on mean_potential
 
   # Return the processed network
   return(grouped_net)
 }
+
 
 
 
@@ -362,7 +366,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
                 }
             }),
             # Calculate weight considering the road type influence
-            weight = (1 - arterialness) * 100 * (1 + 0.1 * road_score)
+            weight = as.integer((1 - arterialness) * 100 * (1 + 0.1 * road_score))
         )
 
     return(network)
