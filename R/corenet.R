@@ -76,7 +76,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
     }
 
     # Merge road networks with specified parameters
-    filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 15, funs = funs, segment_length = 20,max_angle_diff = 10)
+    filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20,max_angle_diff = 10)
 
   print("Finished preparing the network data")
   
@@ -267,7 +267,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch") {
   # Assume coherent_network is already a preprocessed sf object
   rnet_coherent_selected = coherent_network |>
-    dplyr::select(all_fastest_bicycle_go_dutch, weight)
+    dplyr::select({{ key_attribute }}, weight)
   
   # Group and process the network
   grouped_net = rnet_coherent_selected |>
@@ -278,7 +278,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
     tidygraph::activate(edges) |>
     sf::st_as_sf() |>
     sf::st_transform("EPSG:4326") |>
-    dplyr::group_by(group) |>
+    dplyr::group_by(group, !!rlang::sym(key_attribute)) |>
     dplyr::summarise(mean_potential = mean(weight, na.rm = TRUE)) |>
     dplyr::mutate(group = rank(-mean_potential))
 
