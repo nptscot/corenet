@@ -59,7 +59,8 @@ analysis or visualization of critical network pathways.</p>
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">coherent_network_group</span><span class="op">(</span></span>
 <span>  <span class="va">coherent_network</span>,</span>
-<span>  key_attribute <span class="op">=</span> <span class="st">"all_fastest_bicycle_go_dutch"</span></span>
+<span>  key_attribute <span class="op">=</span> <span class="st">"all_fastest_bicycle_go_dutch"</span>,</span>
+<span>  n_group <span class="op">=</span> <span class="fl">12</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -72,6 +73,11 @@ expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.</p></dd>
 
 <dt>key_attribute</dt>
 <dd><p>The attribute used to keep.</p></dd>
+
+
+<dt>n_group</dt>
+<dd><p>The number of groups to divide the network into, based on edge
+betweenness centrality.</p></dd>
 
 </dl></div>
     <div class="section level2">
