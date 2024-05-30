@@ -120,7 +120,7 @@ Group the coherent network
 ```{r}
 grouped_network = coherent_network_group(CN_network, key_attribute = "all_fastest_bicycle_go_dutch")
 
-mapview::mapview(grouped_network, zcol = "all_fastest_bicycle_go_dutch", color = viridis::viridis(12), legend = TRUE)
+# mapview::mapview(grouped_network, zcol = "group", color = viridis::viridis(12), legend = TRUE)
 ```
 
 Convert the coherent network to PMtiles
