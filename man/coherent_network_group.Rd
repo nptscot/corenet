@@ -6,7 +6,8 @@
 \usage{
 coherent_network_group(
   coherent_network,
-  key_attribute = "all_fastest_bicycle_go_dutch"
+  key_attribute = "all_fastest_bicycle_go_dutch",
+  n_group = 12
 )
 }
 \arguments{
@@ -14,11 +15,13 @@ coherent_network_group(
 expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.}
 
 \item{key_attribute}{The attribute used to keep.}
+
+\item{n_group}{The number of groups to divide the network into based on edge betweenness.}
 }
 \value{
-An 'sf' object with edges grouped and ranked based on their mean potential.Assuming 'coherent_network' is obtained from a previous function corenetGenerate the grouped network
-
-grouped_network = coherent_network_group(coherent_network)
+An 'sf' object with edges grouped and ranked based on their mean potential.
+This includes ranking the groups by mean potential to identify and analyze
+critical network pathways more effectively.
 }
 \description{
 This function takes a preprocessed network and applies graph-based analysis to group
@@ -27,4 +30,10 @@ the input network has attributes relevant to cycling traffic dynamics, specifica
 'all_fastest_bicycle_go_dutch' and 'weight'. It outputs a transformed network where
 edges are grouped and ranked according to their mean potential, facilitating further
 analysis or visualization of critical network pathways.
+}
+\examples{
+# Assuming 'coherent_network' is obtained from a previous function corenet
+# Generate the grouped network
+grouped_network = coherent_network_group(coherent_network)
+
 }

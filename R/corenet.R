@@ -257,9 +257,13 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 #' @param coherent_network A preprocessed 'sf' object containing the network data,
 #'        expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.
 #' @param key_attribute The attribute used to keep.
+#' @param n_group The number of groups to divide the network into based on edge betweenness.
 #' 
 #' @return An 'sf' object with edges grouped and ranked based on their mean potential.
+#'         This includes ranking the groups by mean potential to identify and analyze
+#'         critical network pathways more effectively.
 #'
+#' @examples
 #' # Assuming 'coherent_network' is obtained from a previous function corenet
 #' # Generate the grouped network
 #' grouped_network = coherent_network_group(coherent_network)
