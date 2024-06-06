@@ -12,7 +12,8 @@ corenet(
   crs = "EPSG:27700",
   dist = 10,
   threshold = 1500,
-  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07)
+  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07),
+  n_removeDangles = 6
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ corenet(
 \item{threshold}{Value threshold for filtering significant routes, default is 1500.}
 
 \item{road_scores}{A list of road types and their corresponding scoring weights.}
+
+\item{n_removeDangles}{Number of iterations to remove dangles from the network, default is 6.}
 }
 \value{
 A spatial object representing the largest cohesive component of the network, free of dangles.

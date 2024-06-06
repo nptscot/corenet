@@ -2,7 +2,7 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -101,6 +101,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param dist Distance threshold used in path calculations, default is 10 meters.
 #' @param threshold Value threshold for filtering significant routes, default is 1500.
 #' @param road_scores A list of road types and their corresponding scoring weights.
+#' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
 #' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
 #' @examples
@@ -134,7 +135,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'
 
 
-corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", dist = 10, threshold = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000)) {
+corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", dist = 10, threshold = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6) {
 
   if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
@@ -237,7 +238,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   largest_component_sf_without_dangles = removeDangles(largest_component_sf, tolerance = 0.001)
 
   # Remove dangles multiple times to ensure a clean network
-  for (i in 1:6) {
+  for (i in 1:n_removeDangles) {
     largest_component_sf_without_dangles = removeDangles(largest_component_sf_without_dangles)
   }
 
