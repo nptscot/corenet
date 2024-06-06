@@ -32,6 +32,8 @@ corenet(
 \item{threshold}{Value threshold for filtering significant routes, default is 1500.}
 
 \item{road_scores}{A list of road types and their corresponding scoring weights.}
+
+\item{n_removeDangles}{Number of iterations to remove dangles from the network, default is 6.}
 }
 \value{
 A spatial object representing the largest cohesive component of the network, free of dangles.
