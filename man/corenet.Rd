@@ -12,7 +12,8 @@ corenet(
   crs = "EPSG:27700",
   dist = 10,
   threshold = 1500,
-  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07)
+  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07),
+  n_removeDangles = 6
 )
 }
 \arguments{

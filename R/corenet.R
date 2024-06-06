@@ -101,6 +101,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param dist Distance threshold used in path calculations, default is 10 meters.
 #' @param threshold Value threshold for filtering significant routes, default is 1500.
 #' @param road_scores A list of road types and their corresponding scoring weights.
+#' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
 #' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
 #' @examples
