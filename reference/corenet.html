@@ -59,7 +59,8 @@ without dangles, aiming to develop a cohesive cycling network infrastructure.</p
 <span>  crs <span class="op">=</span> <span class="st">"EPSG:27700"</span>,</span>
 <span>  dist <span class="op">=</span> <span class="fl">10</span>,</span>
 <span>  threshold <span class="op">=</span> <span class="fl">1500</span>,</span>
-<span>  road_scores <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>`A Road` <span class="op">=</span> <span class="fl">1</span>, `B Road` <span class="op">=</span> <span class="fl">1</span>, `Minor Road` <span class="op">=</span> <span class="fl">1e+07</span><span class="op">)</span></span>
+<span>  road_scores <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>`A Road` <span class="op">=</span> <span class="fl">1</span>, `B Road` <span class="op">=</span> <span class="fl">1</span>, `Minor Road` <span class="op">=</span> <span class="fl">1e+07</span><span class="op">)</span>,</span>
+<span>  n_removeDangles <span class="op">=</span> <span class="fl">6</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -95,6 +96,10 @@ without dangles, aiming to develop a cohesive cycling network infrastructure.</p
 
 <dt>road_scores</dt>
 <dd><p>A list of road types and their corresponding scoring weights.</p></dd>
+
+
+<dt>n_removeDangles</dt>
+<dd><p>Number of iterations to remove dangles from the network, default is 6.</p></dd>
 
 </dl></div>
     <div class="section level2">
