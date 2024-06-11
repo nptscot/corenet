@@ -86,7 +86,19 @@ sf::st_crs(os_edinburgh_demo_6km) = 27700
 ```
 
 ```{r}
-# Prepare the network for analysis
+# Prepare the network for analysis and rename geom to geometry
+os_edinburgh_demo_6km = sf::st_read("open_roads_edinburgh_6km.gpkg")
+NPT_demo_6km = sf::st_read("NPT_demo_6km.gpkg")
+# Rename 'geom' to 'geometry' if it is indeed named 'geom'
+if ("geom" %in% names(os_edinburgh_demo_6km)) {
+  os_edinburgh_demo_6km <- os_edinburgh_demo_6km %>% 
+    dplyr::rename(geometry = geom)
+}
+
+if ("geom" %in% names(NPT_demo_6km)) {
+  NPT_demo_6km <- NPT_demo_6km %>% 
+    dplyr::rename(geometry = geom)
+}
 OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km, 
                                      influence_network = NPT_demo_6km, 
                                      target_zone, 
@@ -112,6 +124,7 @@ CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", dist = 10, threshold = 1500, 
                       road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+
 # mapview::mapview(CN_network)
 ```
 
@@ -125,5 +138,63 @@ grouped_network = coherent_network_group(CN_network, key_attribute = "all_fastes
 
 Convert the coherent network to PMtiles
 ```{r}
+netwrok = sf::st_read("cohesive networks scotland.geojson")
 create_coherent_network_PMtiles(folder_path = "", city_filename = "test", cohesive_network = grouped_network)
+
+```
+
+```{r}
+library(sf)
+library(dplyr)
+
+# Read and transform initial datasets
+zones_scot = sf::st_read("inputdata/las_scotland_2023.geojson") |>
+  sf::st_transform(crs = "EPSG:27700")
+
+NPT = sf::st_read("inputdata/combined_network_tile.geojson") |>
+  sf::st_transform(crs = "EPSG:27700")
+
+open_roads_national = sf::read_sf("inputdata/oproad_gb.gpkg", layer = "road_link") |>
+  sf::st_transform(crs = "EPSG:27700")
+
+# Get unique city names from LAD23NM
+cities = unique(zones_scot$LAD23NM)
+cities = c("West Lothian", "City of Edinburgh", "Midlothian", "East Lothian")
+
+# Loop over each city
+for (city in cities) {
+  city_filename = snakecase::to_snake_case(city)
+  tryCatch({
+    message("Generating coherent network for: ", city)
+    zone = filter(zones_scot, LAD23NM == city)
+
+    NPT_zone = NPT[sf::st_union(zone), , op = sf::st_intersects]
+
+    min_percentile_value = stats::quantile(NPT_zone$all_fastest_bicycle_go_dutch, probs = 0.938, na.rm = TRUE)
+
+    open_roads_national_zone = open_roads_national[sf::st_union(zone), , op = sf::st_intersects]
+
+    OS_NPT_zone = cohesive_network_prep(base_network = open_roads_national_zone, 
+                                        influence_network = NPT_zone, 
+                                        zone, 
+                                        crs = "EPSG:27700", 
+                                        key_attribute = "road_function", 
+                                        attribute_values = c("A Road", "B Road", "Minor Road"))
+
+    cohesive_network_zone = corenet(NPT_zone, OS_NPT_zone, zone, 
+                                      key_attribute = "all_fastest_bicycle_go_dutch", 
+                                      crs = "EPSG:27700", dist = 10, threshold = min_percentile_value, 
+                                      road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+
+    grouped_network = coherent_network_group(cohesive_network_zone, key_attribute = "all_fastest_bicycle_go_dutch")
+
+    # Use city name in the filename
+    create_coherent_network_PMtiles(folder_path = "outputdata/", city_filename = city_filename, cohesive_network = grouped_network)
+
+    message("Coherent network for: ", city, " generated successfully")
+
+  }, error = function(e) {
+    message(sprintf("An error occurred with %s: %s", city, e$message))
+  })  
+}
 ```
