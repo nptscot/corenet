@@ -86,19 +86,6 @@ sf::st_crs(os_edinburgh_demo_6km) = 27700
 ```
 
 ```{r}
-# Prepare the network for analysis and rename geom to geometry
-os_edinburgh_demo_6km = sf::st_read("open_roads_edinburgh_6km.gpkg")
-NPT_demo_6km = sf::st_read("NPT_demo_6km.gpkg")
-# Rename 'geom' to 'geometry' if it is indeed named 'geom'
-if ("geom" %in% names(os_edinburgh_demo_6km)) {
-  os_edinburgh_demo_6km <- os_edinburgh_demo_6km %>% 
-    dplyr::rename(geometry = geom)
-}
-
-if ("geom" %in% names(NPT_demo_6km)) {
-  NPT_demo_6km <- NPT_demo_6km %>% 
-    dplyr::rename(geometry = geom)
-}
 OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km, 
                                      influence_network = NPT_demo_6km, 
                                      target_zone, 
@@ -111,7 +98,7 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
 # The prepare_network function is invoked within the corenet function; this line allows us to examine it separately.
 prepared_network = prepare_network(OS_NPT_demo, 
                                     key_attribute = "all_fastest_bicycle_go_dutch", 
-                                    road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), 
+                                    road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 3), 
                                     transform_crs = 27700)
 ```
 
