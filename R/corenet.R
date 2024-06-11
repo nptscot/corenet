@@ -133,10 +133,6 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   crs = "EPSG:27700", dist = 10, threshold = 1500,
 #'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
 #'
-CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", dist = 10, threshold = 1500, 
-                      road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
 
 corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", dist = 10, threshold = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6) {
 
