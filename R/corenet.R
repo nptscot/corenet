@@ -344,7 +344,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' @export
 
 prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutch", 
-                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 3),
+                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000),
                            transform_crs = 27700) {
     # Cast the network to LINESTRING and transform to the specified CRS
     network = network |>

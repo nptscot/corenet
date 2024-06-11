@@ -110,7 +110,7 @@ OS_NPT_demo$geometry = OS_NPT_demo$geom
 CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", dist = 10, threshold = 1500, 
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 3))
+                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
 
 # mapview::mapview(CN_network)
 ```
