@@ -134,7 +134,6 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
 #'
 
-
 corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", dist = 10, threshold = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6) {
 
   if (key_attribute %in% names(influence_network)) {
@@ -152,7 +151,13 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
     coordinates = sf::st_coordinates(centroids)
     clusters = dbscan::dbscan(coordinates, eps = 18, minPts = 1)
     centroids$cluster = clusters$cluster
-    unique_centroids = centroids[!duplicated(centroids$cluster), ]    
+    unique_centroids = centroids[!duplicated(centroids$cluster), ]   
+
+    # create a buffer of 10 meters around the cohesive_base_network
+    cohesive_base_network_buffer = sf::st_buffer(cohesive_base_network, dist = 20)
+
+    # filter unique_centroids by the buffer
+    unique_centroids = sf::st_intersection(unique_centroids, cohesive_base_network_buffer)
 
   } else {
     warning(paste0("Warning: ", key_attribute, " does not exist in the network"))
