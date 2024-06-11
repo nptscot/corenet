@@ -232,7 +232,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
       function(n) {
-          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type, dist = 1500)
+          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", dist = 1500)
       }
   )
 
