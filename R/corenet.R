@@ -232,7 +232,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
       function(n) {
-          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, shortest = FALSE, dist = 1500)
+          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type, dist = 1500)
       }
   )
 
@@ -380,19 +380,21 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 
 #' Calculate paths from a given point to centroids within a specified distance range
 #'
-#' This function determines the network paths from a specific point to multiple centroids based on distance thresholds,
-#' optionally returning the shortest paths.
+#' This function determines the network paths from a specific point to multiple centroids based on distance thresholds.
+#' It can compute the shortest, all shortest, or all simple paths depending on the path type specified.
 #'
 #' @param network An sfnetwork object representing the network.
-#' @param point An sf point object from which paths will be calculated.
+#' @param point An sf or sfc object containing a single point feature from which paths will be calculated.
 #' @param dist The maximum distance (in meters) to consider for path calculations.
 #' @param centroids An sf object containing centroids to which paths are calculated.
-#' @param shortest Logical indicating whether the shortest paths are calculated (TRUE) or weighted paths (FALSE).
+#' @param path_type A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
+#'        - 'shortest': Calculates the shortest path considering weights.
+#'        - 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
+#'        - 'all_simple': Calculates all simple paths, ignoring weights.
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 #' @export
 
-calculate_paths_from_point_dist = function(network, point, dist = 500, centroids, shortest = FALSE) {
-    
+calculate_paths_from_point_dist <- function(network, point, dist = 500, centroids, path_type = "shortest") {
     path_cache = list()
     
     # Ensure the network's CRS is correctly set for distance measurement in meters
@@ -417,18 +419,25 @@ calculate_paths_from_point_dist = function(network, point, dist = 500, centroids
     valid_centroids = centroids[distances >= units::set_units(2, "m") & distances <= units::set_units(dist, "m"),]
 
     if (nrow(valid_centroids) > 0) {
-      if (shortest) {
-          paths_from_point = sfnetworks::st_network_paths(network, from = point_geom, to = sf::st_as_sfc(valid_centroids), weights = NULL, type = "shortest") 
-      } else {
-          paths_from_point = sfnetworks::st_network_paths(network, from = point_geom, to = sf::st_as_sfc(valid_centroids), weights = "weight",type = "shortest") 
-      }
-      edges_in_paths = paths_from_point |>  
-          dplyr::pull(edge_paths) |> 
-          base::unlist() |> base::unique()
+        # Define weights based on path_type
+        weights_to_use <- if (path_type == "all_simple") NA else "weight"
+        
+        # Calculate paths based on specified path_type
+        paths_from_point = sfnetworks::st_network_paths(
+            network, 
+            from = point_geom, 
+            to = sf::st_as_sfc(valid_centroids), 
+            weights = weights_to_use,
+            type = path_type
+        )
+        
+        edges_in_paths = paths_from_point |>  
+            dplyr::pull(edge_paths) |> 
+            base::unlist() |> base::unique()
 
-      result = network |> dplyr::slice(unique(edges_in_paths)) |> sf::st_as_sf()
-      } else {
-    result = NULL
+        result = network |> dplyr::slice(unique(edges_in_paths)) |> sf::st_as_sf()
+    } else {
+        result = NULL
     }
 
     path_cache[[point_key]] = result
