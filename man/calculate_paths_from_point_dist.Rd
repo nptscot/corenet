@@ -9,24 +9,27 @@ calculate_paths_from_point_dist(
   point,
   dist = 500,
   centroids,
-  shortest = FALSE
+  path_type = "shortest"
 )
 }
 \arguments{
 \item{network}{An sfnetwork object representing the network.}
 
-\item{point}{An sf point object from which paths will be calculated.}
+\item{point}{An sf or sfc object containing a single point feature from which paths will be calculated.}
 
 \item{dist}{The maximum distance (in meters) to consider for path calculations.}
 
 \item{centroids}{An sf object containing centroids to which paths are calculated.}
 
-\item{shortest}{Logical indicating whether the shortest paths are calculated (TRUE) or weighted paths (FALSE).}
+\item{path_type}{A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
+- 'shortest': Calculates the shortest path considering weights.
+- 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
+- 'all_simple': Calculates all simple paths, ignoring weights.}
 }
 \value{
 An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 }
 \description{
-This function determines the network paths from a specific point to multiple centroids based on distance thresholds,
-optionally returning the shortest paths.
+This function determines the network paths from a specific point to multiple centroids based on distance thresholds.
+It can compute the shortest, all shortest, or all simple paths depending on the path type specified.
 }
