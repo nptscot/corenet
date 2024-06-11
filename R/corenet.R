@@ -344,7 +344,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' @export
 
 prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutch", 
-                           road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000),
+                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000),
                            transform_crs = 27700) {
     # Cast the network to LINESTRING and transform to the specified CRS
     network = network |>
@@ -355,13 +355,9 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
         dplyr::mutate(
             # Handle NA values and normalize using key_attribute
             value = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
-            min_value = min(value, na.rm = TRUE),
             max_value = max(value, na.rm = TRUE),
-            arterialness = dplyr::if_else(
-                max_value > min_value,
-                (value - min_value) / (max_value - min_value),
-                0  # Avoid division by zero
-            ),
+            # Calculate logarithmic arterialness and round it
+            arterialness = round(log1p(value) / log1p(max_value), 3),
             # Dynamically apply road type scores from the road_scores list
             road_score = purrr::map_dbl(road_function, function(x) {
                 if (x %in% names(road_scores)) {
@@ -371,9 +367,9 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
                 }
             }),
             # Calculate weight considering the road type influence
-            weight = as.integer((1 - arterialness) * 100 * (1 + 0.1 * road_score))
+            weight = 0.7 * (1 - arterialness) + 0.3 * road_score
         )
-
+    # network <- sfnetworks::activate(network, "nodes")
     return(network)
 }
 
@@ -394,7 +390,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 #' @export
 
-calculate_paths_from_point_dist <- function(network, point, dist = 500, centroids, path_type = "shortest") {
+calculate_paths_from_point_dist = function(network, point, dist = 500, centroids, path_type = "shortest") {
     path_cache = list()
     
     # Ensure the network's CRS is correctly set for distance measurement in meters
@@ -420,7 +416,7 @@ calculate_paths_from_point_dist <- function(network, point, dist = 500, centroid
 
     if (nrow(valid_centroids) > 0) {
         # Define weights based on path_type
-        weights_to_use <- if (path_type == "all_simple") NA else "weight"
+        weights_to_use = if (path_type == "all_simple") NA else "weight"
         
         # Calculate paths based on specified path_type
         paths_from_point = sfnetworks::st_network_paths(

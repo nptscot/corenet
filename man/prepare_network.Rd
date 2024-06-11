@@ -7,7 +7,7 @@
 prepare_network(
   network,
   key_attribute = "all_fastest_bicycle_go_dutch",
-  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07),
+  road_scores = list(`A Road` = 1, `B Road` = 2, `Minor Road` = 1e+05),
   transform_crs = 27700
 )
 }
