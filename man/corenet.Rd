@@ -10,8 +10,8 @@ corenet(
   target_zone,
   key_attribute = "all_fastest_bicycle_go_dutch",
   crs = "EPSG:27700",
-  dist = 10,
-  threshold = 1500,
+  npt_threshold = 1500,
+  maxDistPts = 1500,
   road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07),
   n_removeDangles = 6
 )
@@ -27,9 +27,9 @@ corenet(
 
 \item{crs}{Coordinate reference system for transformation, default is "EPSG:27700".}
 
-\item{dist}{Distance threshold used in path calculations, default is 10 meters.}
+\item{npt_threshold}{Threshold value for filtering the NPT network, default is 1500.}
 
-\item{threshold}{Value threshold for filtering significant routes, default is 1500.}
+\item{maxDistPts}{Distance threshold used in path calculations, default is 1500 meters.}
 
 \item{road_scores}{A list of road types and their corresponding scoring weights.}
 
@@ -70,7 +70,7 @@ coherent_network = corenet(influence_network = OS_NPT_demo,
                   cohesive_base_network = OS_NPT_demo, 
                   target_zone = target_zone, 
                   key_attribute = "all_fastest_bicycle_go_dutch", 
-                  crs = "EPSG:27700", dist = 10, threshold = 1500,
+                  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
 
 }

@@ -98,7 +98,7 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
 # The prepare_network function is invoked within the corenet function; this line allows us to examine it separately.
 prepared_network = prepare_network(OS_NPT_demo, 
                                     key_attribute = "all_fastest_bicycle_go_dutch", 
-                                    road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 3), 
+                                    road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 1000), 
                                     transform_crs = 27700)
 ```
 
@@ -109,8 +109,8 @@ OS_NPT_demo$geometry = OS_NPT_demo$geom
 # Generate the coherent network for cycling.
 CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
                       key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", dist = 10, threshold = 1500, 
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+                      crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
+                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000))
 
 # mapview::mapview(CN_network)
 ```
