@@ -57,8 +57,8 @@ without dangles, aiming to develop a cohesive cycling network infrastructure.</p
 <span>  <span class="va">target_zone</span>,</span>
 <span>  key_attribute <span class="op">=</span> <span class="st">"all_fastest_bicycle_go_dutch"</span>,</span>
 <span>  crs <span class="op">=</span> <span class="st">"EPSG:27700"</span>,</span>
-<span>  dist <span class="op">=</span> <span class="fl">10</span>,</span>
-<span>  threshold <span class="op">=</span> <span class="fl">1500</span>,</span>
+<span>  npt_threshold <span class="op">=</span> <span class="fl">1500</span>,</span>
+<span>  maxDistPts <span class="op">=</span> <span class="fl">1500</span>,</span>
 <span>  road_scores <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>`A Road` <span class="op">=</span> <span class="fl">1</span>, `B Road` <span class="op">=</span> <span class="fl">1</span>, `Minor Road` <span class="op">=</span> <span class="fl">1e+07</span><span class="op">)</span>,</span>
 <span>  n_removeDangles <span class="op">=</span> <span class="fl">6</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -86,12 +86,12 @@ without dangles, aiming to develop a cohesive cycling network infrastructure.</p
 <dd><p>Coordinate reference system for transformation, default is "EPSG:27700".</p></dd>
 
 
-<dt>dist</dt>
-<dd><p>Distance threshold used in path calculations, default is 10 meters.</p></dd>
+<dt>npt_threshold</dt>
+<dd><p>Threshold value for filtering the NPT network, default is 1500.</p></dd>
 
 
-<dt>threshold</dt>
-<dd><p>Value threshold for filtering significant routes, default is 1500.</p></dd>
+<dt>maxDistPts</dt>
+<dd><p>Distance threshold used in path calculations, default is 1500 meters.</p></dd>
 
 
 <dt>road_scores</dt>
@@ -145,7 +145,7 @@ without dangles, aiming to develop a cohesive cycling network infrastructure.</p
 <span class="r-in"><span>                  cohesive_base_network <span class="op">=</span> <span class="va">OS_NPT_demo</span>, </span></span>
 <span class="r-in"><span>                  target_zone <span class="op">=</span> <span class="va">target_zone</span>, </span></span>
 <span class="r-in"><span>                  key_attribute <span class="op">=</span> <span class="st">"all_fastest_bicycle_go_dutch"</span>, </span></span>
-<span class="r-in"><span>                  crs <span class="op">=</span> <span class="st">"EPSG:27700"</span>, dist <span class="op">=</span> <span class="fl">10</span>, threshold <span class="op">=</span> <span class="fl">1500</span>,</span></span>
+<span class="r-in"><span>                  crs <span class="op">=</span> <span class="st">"EPSG:27700"</span>, npt_threshold <span class="op">=</span> <span class="fl">1500</span>, maxDistPts <span class="op">=</span> <span class="fl">1500</span>,</span></span>
 <span class="r-in"><span>                  road_scores <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"A Road"</span> <span class="op">=</span> <span class="fl">1</span>, <span class="st">"B Road"</span> <span class="op">=</span> <span class="fl">1</span>, <span class="st">"Minor Road"</span> <span class="op">=</span> <span class="fl">10000000</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> Requested number of segments (5620) does not match the number of segments returned by rsgeo (5505).</span>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>st_centroid assumes attributes are constant over geometries</span>
