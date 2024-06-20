@@ -158,7 +158,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
     # filter unique_centroids by the buffer
     unique_centroids = sf::st_intersection(unique_centroids, cohesive_base_network_buffer)
-
+    
   } else {
     warning(paste0("Warning: ", key_attribute, " does not exist in the network"))
     # grid_sf = target_zone
@@ -354,11 +354,8 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
         sfnetworks::activate("edges") |>
         dplyr::mutate(
             # Handle NA values and normalize using key_attribute
-            value = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
-            max_value = max(value, na.rm = TRUE),
-            value = ifelse(value == 0, 0.01, value),
-            # Calculate logarithmic arterialness and round it
-            arterialness = ((max_value / value) ^ 3) / max(((max_value / value) ^ 3), na.rm = TRUE),
+            go_dutch  = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
+            go_dutch_adjusted  = ifelse(go_dutch  == 0, 0.01, go_dutch ),
             # Dynamically apply road type scores from the road_scores list
             road_score = purrr::map_dbl(road_function, function(x) {
                 if (x %in% names(road_scores)) {
@@ -367,12 +364,33 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
                     0  # Default score for unrecognized road types
                 }
             }),
-            # Calculate weight considering the road type influence
-            weight = round(0.95 * arterialness + 0.05 * road_score, 6)
+            # # Calculate weight considering the road type influence
+            # weight = (100 / value) * road_score,
+            # penalty = ifelse(value <= 10 & road_function == "Minor Road", 10, 1),
+            # weight = weight * penalty  
+            # Apply initial weighting logic
+            initial_weight = (100 / go_dutch_adjusted) * road_score, 
+            weight = ifelse(
+              initial_weight <= 100,
+              initial_weight * 2,
+              ifelse(
+                initial_weight <= 250,
+                initial_weight * 1.5,
+                ifelse(
+                  initial_weight <= 500,
+                  initial_weight * 1.2,
+                  initial_weight
+                )
+              )
+            ),
+            # Apply penalties for very low go_dutch values especially on Minor Roads
+            penalty = ifelse(go_dutch <= 10 | road_function == "Minor Road", 10, 1),
+            weight = weight * penalty         
         )
-    # network <- sfnetworks::activate(network, "nodes")
+
     return(network)
 }
+
 
 
 #' Calculate paths from a given point to centroids within a specified distance range
