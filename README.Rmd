@@ -92,6 +92,7 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
                                      crs = "EPSG:27700", 
                                      key_attribute = "road_function", 
                                      attribute_values = c("A Road", "B Road", "Minor Road"))
+#  mapview::mapview(OS_NPT_demo) + mapview::mapview(NPT_demo_6km)
 ```
 
 ```{r}
@@ -110,9 +111,9 @@ OS_NPT_demo$geometry = OS_NPT_demo$geom
 CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000))
+                      road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100))
 
-# mapview::mapview(CN_network)
+mapview::mapview(CN_network)
 ```
 
 Group the coherent network
@@ -127,5 +128,114 @@ Convert the coherent network to PMtiles
 ```{r}
 netwrok = sf::st_read("cohesive networks scotland.geojson")
 create_coherent_network_PMtiles(folder_path = "", city_filename = "test", cohesive_network = grouped_network)
+
+```
+
+
+```{r}
+library(dplyr)
+devtools::load_all()
+
+file_path = "inputdata/open_roads_scotland.gpkg"
+open_roads_scotland = sf::read_sf(file_path)
+sf::st_geometry(open_roads_scotland) = "geometry"
+
+region = "Edinburgh and Lothians"
+message("Processing coherent network for region: ", region)
+region_snake = snakecase::to_snake_case(region)
+cnet_path = "inputdata/combined_network_tile.geojson"
+combined_net = sf::read_sf(cnet_path) |>
+  sf::st_transform(crs = "EPSG:27700")
+
+lads = sf::read_sf("inputdata/la_regions_2023.geojson")
+
+message("Generating coherent network links for: ", region)
+region_boundary = filter(lads, Region == region & LAD23NM == "City of Edinburgh") |>
+  sf::st_transform(crs = "EPSG:27700")
+
+combined_net_region_boundary = combined_net[sf::st_union(region_boundary), , op = sf::st_intersects]
+
+min_percentile_value = stats::quantile(combined_net_region_boundary$all_fastest_bicycle_go_dutch, probs = 0.938, na.rm = TRUE)
+
+open_roads_scotland_region_boundary = open_roads_scotland[sf::st_union(region_boundary), , op = sf::st_intersects]
+
+
+
+OS_combined_net_region_boundary = cohesive_network_prep(
+  base_network = open_roads_scotland_region_boundary,
+  influence_network = combined_net_region_boundary,
+  region_boundary,
+  crs = "EPSG:27700",
+  key_attribute = "road_function",
+  attribute_values = c("A Road", "B Road", "Minor Road")
+)
+# 
+cohesive_network_region_boundary = corenet(combined_net_region_boundary, OS_combined_net_region_boundary, region_boundary,
+  key_attribute = "all_fastest_bicycle_go_dutch",
+  crs = "EPSG:27700", maxDistPts = 1500, npt_threshold = min_percentile_value,
+  road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 10),n_removeDangles = 6
+)
+
+mapview::mapview(cohesive_network_region_boundary)
+
+cohesive_network_region_boundary = cohesive_network_region_boundary |>
+  sf::st_transform(crs = "EPSG:27700")|> select(geometry)
+# save cohesive_network_region_boundary as geojson
+sf::st_write(cohesive_network_region_boundary, "cohesive_network_region_boundary.geojson", delete_dsn = TRUE)
+mapview::mapview(cohesive_network_region_boundary) 
+
+# read geojson and select geometry column only 
+rnet_1 = sf::st_read("coherent_networks/city_of_edinburgh_2024-06-03_coherent_network.geojson") |>
+  sf::st_transform(crs = "EPSG:27700") |> select(geometry)
+rnet_2 = sf::st_read("coherent_networks/east_lothian_2024-06-03_coherent_network.geojson")|> 
+  sf::st_transform(crs = "EPSG:27700")|> select(geometry)
+rnet_3 = sf::st_read("coherent_networks/midlothian_2024-06-03_coherent_network.geojson")|>
+  sf::st_transform(crs = "EPSG:27700")|> select(geometry)
+rnet_4 = sf::st_read("coherent_networks/west_lothian_2024-06-03_coherent_network.geojson")|>
+  sf::st_transform(crs = "EPSG:27700")|> select(geometry)
+
+# rbind rnet_1, rnet_2, rnet_3, rnet_4 and cohesive_network_region_boundary
+rnet = rbind(rnet_1, rnet_2, rnet_3, rnet_4, cohesive_network_region_boundary)
+duplicated_geoms = duplicated(rnet$geometry)
+rnet = rnet[!duplicated_geoms, ] |> sf::st_transform(crs = "EPSG:4326")
+mapview::mapview(rnet)
+# save rnet as geojson
+sf::st_write(rnet, "outputdata/rnet.geojson", delete_dsn = TRUE)
+
+  coherent_pmtiles_filename = paste0("outputdata/",region_snake, "_coherent_network",  ".pmtiles")
+  
+  # Construct the Tippecanoe command
+  command_tippecanoe = paste0(
+    'tippecanoe -o ', coherent_pmtiles_filename,
+    ' --name="',  'coherent_network', '"',
+    ' --layer=cohesivenetwork',
+    ' --attribution="University of Leeds"',
+    ' --minimum-zoom=6',
+    ' --maximum-zoom=13',
+    ' --maximum-tile-bytes=5000000',
+    ' --simplification=10',
+    ' --buffer=5',
+    ' -rg',
+    ' --force ',
+    "outputdata/rnet.geojson"
+  )
+  
+  # Execute the command and capture output
+  system(command_tippecanoe, intern = TRUE)
+
+values <- c(1000, 5000)
+road_scores <- c(0.1, 1)
+
+# Sensitivity parameters
+a <- 2  # High sensitivity to values
+b <- 2  # High sensitivity to low road_scores
+
+# Calculate weights based on the revised formula
+weights <- 1 / ((values + 1)^a * (101 - road_scores)^b) *1000000000
+
+# Combine the data into a data frame for easy viewing
+results <- data.frame(value = values, road_score = road_scores, weight = weights)
+print(results)
+
 
 ```

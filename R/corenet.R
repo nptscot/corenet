@@ -77,7 +77,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
     }
 
     # Merge road networks with specified parameters
-    filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20,max_angle_diff = 10)
+    filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 15, funs = funs, segment_length = 20,max_angle_diff = 15)
     filtered_OS_NPT_zones = filtered_OS_NPT_zones |>
                             dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.integer))
   print("Finished preparing the network data")
@@ -232,7 +232,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
       function(n) {
-          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = 1500)
+          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts)
       }
   )
 
@@ -344,7 +344,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' @export
 
 prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutch", 
-                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000),
+                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100),
                            transform_crs = 27700) {
     # Cast the network to LINESTRING and transform to the specified CRS
     network = network |>
@@ -354,11 +354,8 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
         sfnetworks::activate("edges") |>
         dplyr::mutate(
             # Handle NA values and normalize using key_attribute
-            value = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
-            max_value = max(value, na.rm = TRUE),
-            value = ifelse(value == 0, 0.01, value),
-            # Calculate logarithmic arterialness and round it
-            arterialness = ((max_value / value) ^ 3) / max(((max_value / value) ^ 3), na.rm = TRUE),
+            go_dutch  = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
+            go_dutch_adjusted  = ifelse(go_dutch  == 0, 0.01, go_dutch ),
             # Dynamically apply road type scores from the road_scores list
             road_score = purrr::map_dbl(road_function, function(x) {
                 if (x %in% names(road_scores)) {
@@ -367,8 +364,27 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
                     0  # Default score for unrecognized road types
                 }
             }),
-            # Calculate weight considering the road type influence
-            weight = round(0.95 * arterialness + 0.05 * road_score, 6)
+            # # Calculate weight considering the road type influence
+            # weight = (100 / value) * road_score,
+            # penalty = ifelse(value <= 10 & road_function == "Minor Road", 10, 1),
+            # weight = weight * penalty  
+            initial_weight = (100 / go_dutch_adjusted) * road_score, 
+            weight = ifelse(
+              initial_weight <= 100,
+              initial_weight * 1,
+              ifelse(
+                initial_weight <= 250,
+                initial_weight * 1,
+                ifelse(
+                  initial_weight <= 500,
+                  initial_weight * 1,
+                  initial_weight
+                )
+              )
+            ),
+            # Apply penalties for very low go_dutch values especially on Minor Roads
+            penalty = ifelse(go_dutch <= 10 , 10, 1),
+            weight = weight * penalty         
         )
     # network <- sfnetworks::activate(network, "nodes")
     return(network)
@@ -391,7 +407,8 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 #' @export
 
-calculate_paths_from_point_dist = function(network, point, maxDistPts = 1500, centroids, path_type = "shortest") {
+# TODO add boundary add addtional maxDistPts
+calculate_paths_from_point_dist = function(network, region_boundary, point, maxDistPts = 1500, maxDistPts_LA = 5000, centroids, path_type = "shortest") {
     path_cache = list()
     
     # Ensure the network's CRS is correctly set for distance measurement in meters
