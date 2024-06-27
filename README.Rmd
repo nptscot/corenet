@@ -240,6 +240,7 @@ combined_net = sf::read_sf(cnet_path) |>
 # load the la_regions_2023 data
 region = "Edinburgh and Lothians"
 city = "City of Edinburgh"
+city = "West Lothian"
 lads = sf::read_sf("inputdata/la_regions_2023.geojson")
 
 region_boundary = dplyr::filter(lads, Region == region & LAD23NM == city) |>
@@ -248,7 +249,7 @@ region_boundary = dplyr::filter(lads, Region == region & LAD23NM == city) |>
 # Generate CN for the region
 combined_net_region_boundary = combined_net[sf::st_union(region_boundary), , op = sf::st_intersects]
 
-min_percentile_value = stats::quantile(combined_net_region_boundary$all_fastest_bicycle_go_dutch, probs = 0.938, na.rm = TRUE)
+min_percentile_value = stats::quantile(combined_net_region_boundary$all_fastest_bicycle_go_dutch, probs = 0.94, na.rm = TRUE)
 
 open_roads_scotland_region_boundary = open_roads_scotland[sf::st_union(region_boundary), , op = sf::st_intersects]
 
