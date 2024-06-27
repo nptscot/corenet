@@ -131,11 +131,11 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   cohesive_base_network = OS_NPT_demo, 
 #'                   target_zone = target_zone, 
 #'                   key_attribute = "all_fastest_bicycle_go_dutch", 
-#'                   crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-#'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+#'                   crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2,
+#'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6 , penalty_value = 1)
 #'
 
-corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6 ) {
+corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6 , penalty_value = 1) {
 
   if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
