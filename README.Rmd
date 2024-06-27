@@ -143,51 +143,51 @@ OS_NPT_demo$geometry = OS_NPT_demo$geom
 CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))   
+                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100, penalty_value = 1))   
 mapview::mapview(CN_network, color = "blue")
 ```
 
 ```{r}
 # Generate the coherent network for cycling.
-CN_network_1 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 5000, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# CN_network_1 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 5000, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
 
-CN_network_2 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 4500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# CN_network_2 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 4500, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
 
-CN_network_3 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 4000, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# CN_network_3 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 4000, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
 
-CN_network_4 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 3500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# CN_network_4 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 3500, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
 
-CN_network_5 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 3000, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
-CN_network_6 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 2500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))                     
-CN_network_6 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 2000, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100)) 
-CN_network_7 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))   
+# CN_network_5 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 3000, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# CN_network_6 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 2500, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))                     
+# CN_network_6 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 2000, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100)) 
+# CN_network_7 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+#                       key_attribute = "all_fastest_bicycle_go_dutch", 
+#                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
+#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))   
 
 
-mapview::mapview(CN_network_7, color = "blue") + mapview::mapview(CN_network_6, color = "yellow") + mapview::mapview(CN_network_5, color = "red")  + mapview::mapview(CN_network_4, color = "green") + mapview::mapview(CN_network_3, color = "purple") + mapview::mapview(CN_network_2, color = "orange") + mapview::mapview(CN_network_1, color = "black")
+# mapview::mapview(CN_network_7, color = "blue") + mapview::mapview(CN_network_6, color = "yellow") + mapview::mapview(CN_network_5, color = "red")  + mapview::mapview(CN_network_4, color = "green") + mapview::mapview(CN_network_3, color = "purple") + mapview::mapview(CN_network_2, color = "orange") + mapview::mapview(CN_network_1, color = "black")
 ```
 
 Group the coherent network
@@ -247,7 +247,7 @@ create_coherent_network_PMtiles(folder_path = "", city_filename = "test", cohesi
 # cohesive_network_region_boundary = corenet(combined_net_region_boundary, OS_combined_net_region_boundary, region_boundary,
 #   key_attribute = "all_fastest_bicycle_go_dutch",
 #   crs = "EPSG:27700", maxDistPts = 7000, minDistPts = 500, npt_threshold = min_percentile_value,
-#   road_scores = list("A Road" = 1, "B Road" = 1), n_removeDangles = 6
+#   road_scores = list("A Road" = 1, "B Road" = 1), n_removeDangles = 6, penalty_value = 100
 # )
 # mapview::mapview(cohesive_network_region_boundary)  
 
