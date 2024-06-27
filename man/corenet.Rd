@@ -13,7 +13,7 @@ corenet(
   npt_threshold = 1500,
   maxDistPts = 1500,
   minDistPts = 2,
-  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07),
+  road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1000),
   n_removeDangles = 6,
   penalty_value = 1
 )

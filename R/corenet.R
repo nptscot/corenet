@@ -2,7 +2,7 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -135,7 +135,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000),n_removeDangles = 6,penalty_value = 1)
 #'
 
-corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6 , penalty_value = 1) {
+corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000), n_removeDangles = 6 , penalty_value = 1) {
 
   if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
