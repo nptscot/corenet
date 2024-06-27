@@ -52,6 +52,7 @@ like 'arterialness' and 'weight' which are calculated based on the given road sc
 <span>  <span class="va">network</span>,</span>
 <span>  key_attribute <span class="op">=</span> <span class="st">"all_fastest_bicycle_go_dutch"</span>,</span>
 <span>  road_scores <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>`A Road` <span class="op">=</span> <span class="fl">1</span>, `B Road` <span class="op">=</span> <span class="fl">2</span>, `Minor Road` <span class="op">=</span> <span class="fl">1e+05</span><span class="op">)</span>,</span>
+<span>  penalty_value <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  transform_crs <span class="op">=</span> <span class="fl">27700</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -68,6 +69,10 @@ like 'arterialness' and 'weight' which are calculated based on the given road sc
 
 <dt>road_scores</dt>
 <dd><p>A list specifying scores for different road types. Example: list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000).</p></dd>
+
+
+<dt>penalty_value</dt>
+<dd><p>The penalty value for roads with low values, default is 1.</p></dd>
 
 
 <dt>transform_crs</dt>
@@ -115,7 +120,7 @@ like 'arterialness' and 'weight' which are calculated based on the given road sc
 <span class="r-in"><span><span class="va">prepared_network</span> <span class="op">=</span> <span class="fu">prepare_network</span><span class="op">(</span><span class="va">network</span>, </span></span>
 <span class="r-in"><span>                                    key_attribute <span class="op">=</span> <span class="st">"all_fastest_bicycle_go_dutch"</span>,</span></span>
 <span class="r-in"><span>                                    road_scores <span class="op">=</span> <span class="va">road_scores</span>,</span></span>
-<span class="r-in"><span>                                    transform_crs <span class="op">=</span> <span class="fl">27700</span><span class="op">)</span></span></span>
+<span class="r-in"><span>                                    transform_crs <span class="op">=</span> <span class="fl">27700</span>, penalty_value <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Print the prepared network</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">prepared_network</span><span class="op">)</span></span></span>
@@ -125,7 +130,7 @@ like 'arterialness' and 'weight' which are calculated based on the given road sc
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #555555;">#</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #555555;"># An undirected multigraph with 1 component with spatially explicit edges</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #555555;">#</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 1,237 × 11</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 1,237 × 12</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    from    to road_function all_fastest_bicycle_go_dutch length_x</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;int&gt;</span> <span style="color: #949494; font-style: italic;">&lt;chr&gt;</span>                                <span style="color: #949494; font-style: italic;">&lt;int&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;int&gt;</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span>     1     2 A Road                             1<span style="text-decoration: underline;">461</span>109        0</span>
@@ -135,8 +140,8 @@ like 'arterialness' and 'weight' which are calculated based on the given road sc
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span>     9    10 A Road                               <span style="text-decoration: underline;">10</span>654       26</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">6</span>    11    12 Minor Road                            <span style="text-decoration: underline;">8</span>756       33</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ℹ 1,231 more rows</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ℹ 6 more variables: geom &lt;LINESTRING [m]&gt;, value &lt;dbl&gt;, max_value &lt;dbl&gt;,</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   arterialness &lt;dbl&gt;, road_score &lt;dbl&gt;, weight &lt;dbl&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ℹ 7 more variables: geom &lt;LINESTRING [m]&gt;, value &lt;dbl&gt;, max_value &lt;dbl&gt;,</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;">#   arterialness &lt;dbl&gt;, road_score &lt;dbl&gt;, weight &lt;dbl&gt;, penalty &lt;dbl&gt;</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #555555;">#</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 1,124 × 1</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                  geom</span>
