@@ -92,7 +92,7 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
                                      crs = "EPSG:27700", 
                                      key_attribute = "road_function", 
                                      attribute_values = c("A Road", "B Road", "Minor Road"))
-mapview::mapview(OS_NPT_demo) + mapview::mapview(NPT_demo_6km, color = "red")
+mapview::mapview(OS_NPT_demo, color = "blue") + mapview::mapview(NPT_demo_6km, color = "red")
 ```
 
 ```{r}
@@ -101,37 +101,40 @@ prepared_network = prepare_network(OS_NPT_demo,
                                     key_attribute = "all_fastest_bicycle_go_dutch", 
                                     road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), 
                                     transform_crs = 27700)
-# library(sfnetworks)
-# library(dplyr)
-# library(tidyr)
 
-# # Activate edges and use dplyr to summarize
-# summary_stats <- prepared_network %>%
-#   sfnetworks::activate("edges") %>%
-#   as_tibble() %>%  # Convert activated edges to a tibble if needed
-#   summarise(
-#     min_weight = min(weight, na.rm = TRUE),
-#     max_weight = max(weight, na.rm = TRUE),
-#     median_weight = median(weight, na.rm = TRUE),
-#     mean_weight = mean(weight, na.rm = TRUE)
-#   )
+# check weight in prepared_network
+library(sfnetworks)
+library(dplyr)
+library(tidyr)
 
-# # Print the summary statistics
-# print(summary_stats)
-# library(dplyr)
-# library(sfnetworks)
+# Activate edges and use dplyr to summarize
+summary_stats = prepared_network |>
+  sfnetworks::activate("edges") |>
+  as_tibble() |>  # Convert activated edges to a tibble if needed
+  summarise(
+    min_weight = min(weight, na.rm = TRUE),
+    max_weight = max(weight, na.rm = TRUE),
+    median_weight = median(weight, na.rm = TRUE),
+    mean_weight = mean(weight, na.rm = TRUE)
+  )
+
+# Print the summary statistics
+print(summary_stats)
+
+library(dplyr)
+library(sfnetworks)
 
 # # Activate edges and select relevant columns to view
-# route_weights <- prepared_network %>%
-#   sfnetworks::activate("edges") %>%
-#   as_tibble() %>%  # Convert to a tibble for easier handling
+# route_weights = prepared_network |>
+#   sfnetworks::activate("edges") |>
+#   as_tibble() |>  # Convert to a tibble for easier handling
 #   select(from, to, road_function, go_dutch, weight,penalty)  # Adjust the columns as needed
 
 # # View the first few rows in the console
 # print(head(route_weights))
 
 # # Or to view a specific number of routes sorted by weight:
-# route_weights_sorted <- route_weights %>%
+# route_weights_sorted = route_weights |>
 #   arrange(desc(weight))  # Use `arrange(weight)` for ascending order
 # print(head(route_weights_sorted, 20))  # Adjust the number to view more or fewer routes
 
