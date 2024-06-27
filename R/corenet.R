@@ -103,6 +103,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param npt_threshold Threshold value for filtering the NPT network, default is 1500.
 #' @param road_scores A list of road types and their corresponding scoring weights.
 #' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
+#' @param penalty_value The penalty value for roads with low values, default is 1.
 #' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
 #' @examples
