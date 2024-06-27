@@ -147,46 +147,65 @@ mapview::mapview(CN_network, color = "blue")
 ```
 
 ```{r}
-# Generate the coherent network for cycling.
-# CN_network_1 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 5000, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# Load necessary libraries
+devtools::load_all()
+library(mapview)
+library(RColorBrewer)
+library(purrr) # For the map and reduce functions
 
-# CN_network_2 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone, 
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 4500, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# Define common parameters
+network_params = list(
+  NPT_demo_6km = NPT_demo_6km,
+  OS_NPT_demo = OS_NPT_demo,
+  target_zone = target_zone,
+  key_attribute = "all_fastest_bicycle_go_dutch",
+  crs = "EPSG:27700",
+  maxDistPts = 1500,
+  road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100)
+)
 
-# CN_network_3 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 4000, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# Define the varying npt_threshold values
+# create a vector of npt_threshold values by 200 intervals from 5000 to 4000
+thresholds = seq(5000, 1400, by = -200)
 
-# CN_network_4 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 3500, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
+# Generate the networks using varying npt_threshold
+CN_networks = lapply(thresholds, function(threshold) {
+  corenet(NPT_demo_6km,
+          OS_NPT_demo,
+          target_zone = network_params$target_zone,
+          key_attribute = network_params$key_attribute,
+          crs = network_params$crs,
+          npt_threshold = threshold,
+          maxDistPts = network_params$maxDistPts,
+          road_scores = network_params$road_scores)
+})
 
-# CN_network_5 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 3000, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))
-# CN_network_6 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 2500, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))                     
-# CN_network_6 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 2000, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100)) 
-# CN_network_7 = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-#                       key_attribute = "all_fastest_bicycle_go_dutch", 
-#                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-#                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100))   
+# Determine the number of networks for color assignment
+num_networks = length(CN_networks)
 
+# Generate a color palette
+if (num_networks > 12) {  # RColorBrewer has a max of 12 colors for most palettes
+    network_colors = colorRampPalette(brewer.pal(12, "Set3"))(num_networks)
+} else {
+    network_colors = brewer.pal(num_networks, "Set3")
+}
 
-# mapview::mapview(CN_network_7, color = "blue") + mapview::mapview(CN_network_6, color = "yellow") + mapview::mapview(CN_network_5, color = "red")  + mapview::mapview(CN_network_4, color = "green") + mapview::mapview(CN_network_3, color = "purple") + mapview::mapview(CN_network_2, color = "orange") + mapview::mapview(CN_network_1, color = "black")
+# Create mapview objects for each network with assigned colors
+map_list <- lapply(seq_along(CN_networks), function(i) {
+    # Generate a unique name for each network based on its index
+    layer_name <- paste("Network", i)
+    # Create the mapview object with the specified color and name
+    mapview::mapview(CN_networks[[i]], color = network_colors[i], layer.name = layer_name)
+})
+
+# Combine all mapview objects into a single map object using a loop
+combined_map <- mapview()  # Start with an empty mapview object
+for (i in seq_along(map_list)) {
+    combined_map <- combined_map + map_list[[i]]
+}
+
+# Display the combined map
+combined_map
 ```
 
 Group the coherent network
@@ -194,7 +213,7 @@ Group the coherent network
 ```{r}
 grouped_network = coherent_network_group(CN_network, key_attribute = "all_fastest_bicycle_go_dutch")
 
-# mapview::mapview(grouped_network, zcol = "group", color = viridis::viridis(12), legend = TRUE)
+mapview::mapview(grouped_network, zcol = "group", color = viridis::viridis(12), legend = TRUE)
 ```
 
 Convert the coherent network to PMtiles
@@ -203,61 +222,88 @@ netwrok = sf::st_read("cohesive networks scotland.geojson")
 create_coherent_network_PMtiles(folder_path = "", city_filename = "test", cohesive_network = grouped_network)
 ```
 
+# Replacing the Examples
 ```{r}
-# library(dplyr)
-# devtools::load_all()
+library(dplyr)
+devtools::load_all()
 
-# file_path = "inputdata/open_roads_scotland.gpkg"
-# open_roads_scotland = sf::read_sf(file_path)
-# sf::st_geometry(open_roads_scotland) = "geometry"
+# load the open roads scotland data
+file_path = "inputdata/open_roads_scotland.gpkg"
+open_roads_scotland = sf::read_sf(file_path)
+sf::st_geometry(open_roads_scotland) = "geometry"
 
-# region = "Edinburgh and Lothians"
-# message("Processing coherent network for region: ", region)
-# region_snake = snakecase::to_snake_case(region)
-# cnet_path = "inputdata/combined_network_tile.geojson"
-# combined_net = sf::read_sf(cnet_path) |>
-#   sf::st_transform(crs = "EPSG:27700")
+# load the combined network data
+cnet_path = "inputdata/combined_network_tile.geojson"
+combined_net = sf::read_sf(cnet_path) |>
+  sf::st_transform(crs = "EPSG:27700")
 
-# lads = sf::read_sf("inputdata/la_regions_2023.geojson")
+# load the la_regions_2023 data
+region = "Edinburgh and Lothians"
+city = "East Lothian"
+lads = sf::read_sf("inputdata/la_regions_2023.geojson")
 
-# message("Generating coherent network links for: ", region)
-# city = "East Lothian"
+region_boundary = dplyr::filter(lads, Region == region | LAD23NM == city) |>
+  sf::st_transform(crs = "EPSG:27700")
 
-# region_boundary = filter(lads, Region == region) |>
-#   sf::st_transform(crs = "EPSG:27700")
+# Generate CN for the region
+combined_net_region_boundary = combined_net[sf::st_union(region_boundary), , op = sf::st_intersects]
 
-# combined_net_region_boundary = combined_net[sf::st_union(region_boundary), , op = sf::st_intersects]
+min_percentile_value = stats::quantile(combined_net_region_boundary$all_fastest_bicycle_go_dutch, probs = 0.938, na.rm = TRUE)
 
-# min_percentile_value = stats::quantile(combined_net_region_boundary$all_fastest_bicycle_go_dutch, probs = 0.89, na.rm = TRUE)
-
-# open_roads_scotland_region_boundary = open_roads_scotland[sf::st_union(region_boundary), , op = sf::st_intersects]
-
-
-
-# OS_combined_net_region_boundary = cohesive_network_prep(
-#   base_network = open_roads_scotland_region_boundary,
-#   influence_network = combined_net_region_boundary,
-#   region_boundary,
-#   crs = "EPSG:27700",
-#   key_attribute = "road_function",
-#   attribute_values = c("A Road", "B Road")
-# )
-
-# cohesive_network_region_boundary = corenet(combined_net_region_boundary, OS_combined_net_region_boundary, region_boundary,
-#   key_attribute = "all_fastest_bicycle_go_dutch",
-#   crs = "EPSG:27700", maxDistPts = 7000, minDistPts = 500, npt_threshold = min_percentile_value,
-#   road_scores = list("A Road" = 1, "B Road" = 1), n_removeDangles = 6, penalty_value = 100
-# )
-# mapview::mapview(cohesive_network_region_boundary)  
+open_roads_scotland_region_boundary = open_roads_scotland[sf::st_union(region_boundary), , op = sf::st_intersects]
 
 
-# # load CN
-# CN1 = sf::read_sf("inputdata/coherent_networks/city_of_edinburgh_2024-06-03_coherent_network.geojson")
-# CN2 = sf::read_sf("inputdata/coherent_networks/east_lothian_2024-06-03_coherent_network.geojson")
-# CN3 = sf::read_sf("inputdata/coherent_networks/midlothian_2024-06-03_coherent_network.geojson")
-# CN4 = sf::read_sf("inputdata/coherent_networks/west_lothian_2024-06-03_coherent_network.geojson")
+OS_combined_net_region_boundary = cohesive_network_prep(
+  base_network = open_roads_scotland_region_boundary,
+  influence_network = combined_net_region_boundary,
+  region_boundary,
+  crs = "EPSG:27700",
+  key_attribute = "road_function",
+  attribute_values = c("A Road", "B Road", "Minor Road")
+)
 
-# mapview::mapview(cohesive_network_region_boundary)   + mapview::mapview(CN1, color = "red") + mapview::mapview(CN2, color = "blue") + mapview::mapview(CN3, color = "green") + mapview::mapview(CN4, color = "yellow")
+cohesive_network_region_boundary = corenet(combined_net_region_boundary, OS_combined_net_region_boundary, region_boundary,
+  key_attribute = "all_fastest_bicycle_go_dutch",
+  crs = "EPSG:27700", maxDistPts = 1500, minDistPts = 2, npt_threshold = min_percentile_value,
+  road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100), n_removeDangles = 6, penalty_value = 1
+)
+mapview::mapview(cohesive_network_region_boundary)  
+```
+
+```{r}
+region_boundary = filter(lads, Region == region) |>
+  sf::st_transform(crs = "EPSG:27700")
+
+# Generate CN for the region
+combined_net_region_boundary = combined_net[sf::st_union(region_boundary), , op = sf::st_intersects]
+
+min_percentile_value = stats::quantile(combined_net_region_boundary$all_fastest_bicycle_go_dutch, probs = 0.88, na.rm = TRUE)
+
+open_roads_scotland_region_boundary = open_roads_scotland[sf::st_union(region_boundary), , op = sf::st_intersects]
+
+
+OS_combined_net_region_boundary = cohesive_network_prep(
+  base_network = open_roads_scotland_region_boundary,
+  influence_network = combined_net_region_boundary,
+  region_boundary,
+  crs = "EPSG:27700",
+  key_attribute = "road_function",
+  attribute_values = c("A Road", "B Road"),
+)
+
+cohesive_network_region_boundary = corenet(combined_net_region_boundary, OS_combined_net_region_boundary, region_boundary,
+  key_attribute = "all_fastest_bicycle_go_dutch",
+  crs = "EPSG:27700", maxDistPts = 1500, minDistPts = 2, npt_threshold = min_percentile_value,
+  road_scores = list("A Road" = 1, "B Road" = 1), n_removeDangles = 6, penalty_value = 100
+)
+mapview::mapview(cohesive_network_region_boundary)  
+# load CN
+CN1 = sf::read_sf("inputdata/coherent_networks/city_of_edinburgh_2024-06-03_coherent_network.geojson")
+CN2 = sf::read_sf("inputdata/coherent_networks/east_lothian_2024-06-03_coherent_network.geojson")
+CN3 = sf::read_sf("inputdata/coherent_networks/midlothian_2024-06-03_coherent_network.geojson")
+CN4 = sf::read_sf("inputdata/coherent_networks/west_lothian_2024-06-03_coherent_network.geojson")
+
+mapview::mapview(cohesive_network_region_boundary)   + mapview::mapview(CN1, color = "red") + mapview::mapview(CN2, color = "blue") + mapview::mapview(CN3, color = "green") + mapview::mapview(CN4, color = "yellow")
 
 ```
 
