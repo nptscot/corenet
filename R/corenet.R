@@ -2,7 +2,7 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -99,9 +99,11 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param key_attribute Attribute used to determine significant network routes, default is "all_fastest_bicycle_go_dutch".
 #' @param crs Coordinate reference system for transformation, default is "EPSG:27700".
 #' @param maxDistPts Distance threshold used in path calculations, default is 1500 meters.
+#' @param minDistPts Minimum distance threshold used in path calculations, default is 2 meters.
 #' @param npt_threshold Threshold value for filtering the NPT network, default is 1500.
 #' @param road_scores A list of road types and their corresponding scoring weights.
 #' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
+#' @param penalty_value The penalty value for roads with low values, default is 1.
 #' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
 #' @examples
@@ -130,11 +132,11 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   cohesive_base_network = OS_NPT_demo, 
 #'                   target_zone = target_zone, 
 #'                   key_attribute = "all_fastest_bicycle_go_dutch", 
-#'                   crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-#'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
+#'                   crs = "EPSG:27700",npt_threshold = 1500,maxDistPts = 1500,minDistPts = 2,
+#'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000),n_removeDangles = 6,penalty_value = 1)
 #'
 
-corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6) {
+corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000), n_removeDangles = 6 , penalty_value = 1) {
 
   if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
@@ -158,7 +160,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
     # filter unique_centroids by the buffer
     unique_centroids = sf::st_intersection(unique_centroids, cohesive_base_network_buffer)
-
+    
   } else {
     warning(paste0("Warning: ", key_attribute, " does not exist in the network"))
     # grid_sf = target_zone
@@ -226,13 +228,13 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   }
 
   # Prepare network and calculate paths
-  prepared_network = prepare_network(cohesive_base_network, key_attribute , road_scores, transform_crs = crs) 
+  prepared_network = prepare_network(cohesive_base_network, key_attribute , road_scores, transform_crs = crs , penalty_value = penalty_value) 
 
 
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
       function(n) {
-          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts)
+          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts, minDistPts = minDistPts)
       }
   )
 
@@ -259,21 +261,17 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 #' 'all_fastest_bicycle_go_dutch' and 'weight'. It outputs a transformed network where
 #' edges are grouped and ranked according to their mean potential, facilitating further
 #' analysis or visualization of critical network pathways.
-#'
 #' @param coherent_network A preprocessed 'sf' object containing the network data,
 #'        expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.
 #' @param key_attribute The attribute used to keep.
 #' @param n_group The number of groups to divide the network into, based on edge
 #'        betweenness centrality.
-#' 
 #' @return An 'sf' object with edges grouped and ranked based on their mean potential.
-#'
+#' @export
+#' @examples
 #' # Assuming 'coherent_network' is obtained from a previous function corenet
 #' # Generate the grouped network
-#' grouped_network = coherent_network_group(coherent_network)
-#'
-#' @export
-
+#' # grouped_network = coherent_network_group(coherent_network)
 coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch", n_group = 12) {
 
   rnet_coherent_selected = coherent_network |>
@@ -307,6 +305,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' @param key_attribute The attribute name from the network used for normalization and scoring, default is "all_fastest_bicycle_go_dutch".
 #' @param road_scores A list specifying scores for different road types. Example: list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000).
 #' @param transform_crs The numeric CRS code for coordinate transformation, default is 27700.
+#' @param penalty_value The penalty value for roads with low values, default is 1.
 #' @return An 'sfnetwork' object with attributes 'arterialness' and 'weight' that account for road conditions and their relative importance.
 #' @examples
 #' library(sf)
@@ -337,14 +336,14 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' prepared_network = prepare_network(network, 
 #'                                     key_attribute = "all_fastest_bicycle_go_dutch",
 #'                                     road_scores = road_scores,
-#'                                     transform_crs = 27700)
+#'                                     transform_crs = 27700, penalty_value = 1)
 #'
 #' # Print the prepared network
 #' print(prepared_network)
 #' @export
 
 prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutch", 
-                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000),
+                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000),penalty_value = 1,
                            transform_crs = 27700) {
     # Cast the network to LINESTRING and transform to the specified CRS
     network = network |>
@@ -368,7 +367,9 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
                 }
             }),
             # Calculate weight considering the road type influence
-            weight = round(0.95 * arterialness + 0.05 * road_score, 6)
+            weight = round(0.95 * arterialness + 0.05 * road_score, 6), 
+            penalty = ifelse(value <= 200 , penalty_value, 1),
+            weight = weight * penalty    
         )
     # network <- sfnetworks::activate(network, "nodes")
     return(network)
@@ -383,6 +384,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @param network An sfnetwork object representing the network.
 #' @param point An sf or sfc object containing a single point feature from which paths will be calculated.
 #' @param maxDistPts The maximum distance (in meters) to consider for path calculations.
+#' @param minDistPts The minimum distance (in meters) to consider for path calculations.
 #' @param centroids An sf object containing centroids to which paths are calculated.
 #' @param path_type A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
 #'        - 'shortest': Calculates the shortest path considering weights.
@@ -391,7 +393,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 #' @export
 
-calculate_paths_from_point_dist = function(network, point, maxDistPts = 1500, centroids, path_type = "shortest") {
+calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDistPts = 1500, centroids, path_type = "shortest") {
     path_cache = list()
     
     # Ensure the network's CRS is correctly set for distance measurement in meters
@@ -413,7 +415,7 @@ calculate_paths_from_point_dist = function(network, point, maxDistPts = 1500, ce
     distances = sf::st_distance(point_geom, centroids_geom)
 
     # Filter centroids based on the distance criteria
-    valid_centroids = centroids[distances >= units::set_units(2, "m") & distances <= units::set_units(maxDistPts, "m"),]
+    valid_centroids = centroids[distances >= units::set_units(minDistPts, "m") & distances <= units::set_units(maxDistPts, "m"),]
 
     if (nrow(valid_centroids) > 0) {
         # Define weights based on path_type

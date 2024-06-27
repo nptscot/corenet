@@ -8,6 +8,7 @@ prepare_network(
   network,
   key_attribute = "all_fastest_bicycle_go_dutch",
   road_scores = list(`A Road` = 1, `B Road` = 2, `Minor Road` = 1e+05),
+  penalty_value = 1,
   transform_crs = 27700
 )
 }
@@ -17,6 +18,8 @@ prepare_network(
 \item{key_attribute}{The attribute name from the network used for normalization and scoring, default is "all_fastest_bicycle_go_dutch".}
 
 \item{road_scores}{A list specifying scores for different road types. Example: list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000).}
+
+\item{penalty_value}{The penalty value for roads with low values, default is 1.}
 
 \item{transform_crs}{The numeric CRS code for coordinate transformation, default is 27700.}
 }
@@ -57,7 +60,7 @@ road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100000)
 prepared_network = prepare_network(network, 
                                     key_attribute = "all_fastest_bicycle_go_dutch",
                                     road_scores = road_scores,
-                                    transform_crs = 27700)
+                                    transform_crs = 27700, penalty_value = 1)
 
 # Print the prepared network
 print(prepared_network)
