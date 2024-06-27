@@ -59,7 +59,7 @@ road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 100000)
 prepared_network = prepare_network(network, 
                                     key_attribute = "all_fastest_bicycle_go_dutch",
                                     road_scores = road_scores,
-                                    transform_crs = 27700)
+                                    transform_crs = 27700, penalty_value = 1)
 
 # Print the prepared network
 print(prepared_network)

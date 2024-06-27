@@ -20,9 +20,7 @@ expected to have columns 'all_fastest_bicycle_go_dutch' and 'weight'.}
 betweenness centrality.}
 }
 \value{
-An 'sf' object with edges grouped and ranked based on their mean potential.Assuming 'coherent_network' is obtained from a previous function corenetGenerate the grouped network
-
-grouped_network = coherent_network_group(coherent_network)
+An 'sf' object with edges grouped and ranked based on their mean potential.
 }
 \description{
 This function takes a preprocessed network and applies graph-based analysis to group
@@ -31,4 +29,9 @@ the input network has attributes relevant to cycling traffic dynamics, specifica
 'all_fastest_bicycle_go_dutch' and 'weight'. It outputs a transformed network where
 edges are grouped and ranked according to their mean potential, facilitating further
 analysis or visualization of critical network pathways.
+}
+\examples{
+# Assuming 'coherent_network' is obtained from a previous function corenet
+# Generate the grouped network
+grouped_network = coherent_network_group(coherent_network)
 }
