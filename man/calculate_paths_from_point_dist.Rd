@@ -7,6 +7,7 @@
 calculate_paths_from_point_dist(
   network,
   point,
+  minDistPts = 2,
   maxDistPts = 1500,
   centroids,
   path_type = "shortest"
@@ -16,6 +17,8 @@ calculate_paths_from_point_dist(
 \item{network}{An sfnetwork object representing the network.}
 
 \item{point}{An sf or sfc object containing a single point feature from which paths will be calculated.}
+
+\item{minDistPts}{The minimum distance (in meters) to consider for path calculations.}
 
 \item{maxDistPts}{The maximum distance (in meters) to consider for path calculations.}
 

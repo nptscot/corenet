@@ -7,7 +7,7 @@
 prepare_network(
   network,
   key_attribute = "all_fastest_bicycle_go_dutch",
-  road_scores = list(`A Road` = 1, `B Road` = 2, `Minor Road` = 1e+05),
+  road_scores = list(`A Road` = 1, `B Road` = 2, `Minor Road` = 1e+05, penalty_value = 1),
   transform_crs = 27700
 )
 }
@@ -19,6 +19,8 @@ prepare_network(
 \item{road_scores}{A list specifying scores for different road types. Example: list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000).}
 
 \item{transform_crs}{The numeric CRS code for coordinate transformation, default is 27700.}
+
+\item{penalty_value}{The penalty value for roads with low values, default is 1.}
 }
 \value{
 An 'sfnetwork' object with attributes 'arterialness' and 'weight' that account for road conditions and their relative importance.

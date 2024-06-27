@@ -2,7 +2,7 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -99,6 +99,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param key_attribute Attribute used to determine significant network routes, default is "all_fastest_bicycle_go_dutch".
 #' @param crs Coordinate reference system for transformation, default is "EPSG:27700".
 #' @param maxDistPts Distance threshold used in path calculations, default is 1500 meters.
+#' @param minDistPts Minimum distance threshold used in path calculations, default is 2 meters.
 #' @param npt_threshold Threshold value for filtering the NPT network, default is 1500.
 #' @param road_scores A list of road types and their corresponding scoring weights.
 #' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
@@ -134,7 +135,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000))
 #'
 
-corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6) {
+corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000), n_removeDangles = 6 ) {
 
   if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
@@ -232,7 +233,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
       function(n) {
-          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts)
+          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts, minDistPts = minDistPts)
       }
   )
 
@@ -307,6 +308,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' @param key_attribute The attribute name from the network used for normalization and scoring, default is "all_fastest_bicycle_go_dutch".
 #' @param road_scores A list specifying scores for different road types. Example: list("A Road" = 1, "B Road" = 1, "Minor Road" = 10000000).
 #' @param transform_crs The numeric CRS code for coordinate transformation, default is 27700.
+#' @param penalty_value The penalty value for roads with low values, default is 1.
 #' @return An 'sfnetwork' object with attributes 'arterialness' and 'weight' that account for road conditions and their relative importance.
 #' @examples
 #' library(sf)
@@ -344,7 +346,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' @export
 
 prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutch", 
-                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000),
+                           road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100000, penalty_value = 1),
                            transform_crs = 27700) {
     # Cast the network to LINESTRING and transform to the specified CRS
     network = network |>
@@ -354,8 +356,11 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
         sfnetworks::activate("edges") |>
         dplyr::mutate(
             # Handle NA values and normalize using key_attribute
-            go_dutch  = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
-            go_dutch_adjusted  = ifelse(go_dutch  == 0, 0.01, go_dutch ),
+            value = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
+            max_value = max(value, na.rm = TRUE),
+            value = ifelse(value == 0, 0.01, value),
+            # Calculate logarithmic arterialness and round it
+            arterialness = ((max_value / value) ^ 3) / max(((max_value / value) ^ 3), na.rm = TRUE),
             # Dynamically apply road type scores from the road_scores list
             road_score = purrr::map_dbl(road_function, function(x) {
                 if (x %in% names(road_scores)) {
@@ -364,33 +369,14 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
                     0  # Default score for unrecognized road types
                 }
             }),
-            # # Calculate weight considering the road type influence
-            # weight = (100 / value) * road_score,
-            # penalty = ifelse(value <= 10 & road_function == "Minor Road", 10, 1),
-            # weight = weight * penalty  
-            # Apply initial weighting logic
-            initial_weight = (100 / go_dutch_adjusted) * road_score, 
-            weight = ifelse(
-              initial_weight <= 100,
-              initial_weight * 2,
-              ifelse(
-                initial_weight <= 250,
-                initial_weight * 1.5,
-                ifelse(
-                  initial_weight <= 500,
-                  initial_weight * 1.2,
-                  initial_weight
-                )
-              )
-            ),
-            # Apply penalties for very low go_dutch values especially on Minor Roads
-            penalty = ifelse(go_dutch <= 10 | road_function == "Minor Road", 10, 1),
-            weight = weight * penalty         
+            # Calculate weight considering the road type influence
+            weight = round(0.95 * arterialness + 0.05 * road_score, 6), 
+            penalty = ifelse(value <= 200 , penalty_value, 1),
+            weight = weight * penalty    
         )
-
+    # network <- sfnetworks::activate(network, "nodes")
     return(network)
 }
-
 
 
 #' Calculate paths from a given point to centroids within a specified distance range
@@ -401,6 +387,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @param network An sfnetwork object representing the network.
 #' @param point An sf or sfc object containing a single point feature from which paths will be calculated.
 #' @param maxDistPts The maximum distance (in meters) to consider for path calculations.
+#' @param minDistPts The minimum distance (in meters) to consider for path calculations.
 #' @param centroids An sf object containing centroids to which paths are calculated.
 #' @param path_type A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
 #'        - 'shortest': Calculates the shortest path considering weights.
@@ -409,7 +396,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 #' @export
 
-calculate_paths_from_point_dist = function(network, point, maxDistPts = 1500, centroids, path_type = "shortest") {
+calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDistPts = 1500, centroids, path_type = "shortest") {
     path_cache = list()
     
     # Ensure the network's CRS is correctly set for distance measurement in meters
@@ -431,7 +418,7 @@ calculate_paths_from_point_dist = function(network, point, maxDistPts = 1500, ce
     distances = sf::st_distance(point_geom, centroids_geom)
 
     # Filter centroids based on the distance criteria
-    valid_centroids = centroids[distances >= units::set_units(2, "m") & distances <= units::set_units(maxDistPts, "m"),]
+    valid_centroids = centroids[distances >= units::set_units(minDistPts, "m") & distances <= units::set_units(maxDistPts, "m"),]
 
     if (nrow(valid_centroids) > 0) {
         # Define weights based on path_type

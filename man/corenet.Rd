@@ -12,6 +12,7 @@ corenet(
   crs = "EPSG:27700",
   npt_threshold = 1500,
   maxDistPts = 1500,
+  minDistPts = 2,
   road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1e+07),
   n_removeDangles = 6
 )
@@ -30,6 +31,8 @@ corenet(
 \item{npt_threshold}{Threshold value for filtering the NPT network, default is 1500.}
 
 \item{maxDistPts}{Distance threshold used in path calculations, default is 1500 meters.}
+
+\item{minDistPts}{Minimum distance threshold used in path calculations, default is 2 meters.}
 
 \item{road_scores}{A list of road types and their corresponding scoring weights.}
 
