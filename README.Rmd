@@ -271,14 +271,14 @@ mapview::mapview(cohesive_network_region_boundary)
 ```
 
 ```{r}
-region_boundary = filter(lads, Region == region) |>
+region_boundary = dplyr::filter(lads, Region == region) |>
   sf::st_transform(crs = "EPSG:27700")
 
 # Generate CN for the region
 combined_net_region_boundary = combined_net[sf::st_union(region_boundary), , op = sf::st_intersects]
 
 min_percentile_value = stats::quantile(combined_net_region_boundary$all_fastest_bicycle_go_dutch, probs = 0.88, na.rm = TRUE)
-print(min_percentile_value)
+
 open_roads_scotland_region_boundary = open_roads_scotland[sf::st_union(region_boundary), , op = sf::st_intersects]
 
 
@@ -288,12 +288,12 @@ OS_combined_net_region_boundary = cohesive_network_prep(
   region_boundary,
   crs = "EPSG:27700",
   key_attribute = "road_function",
-  attribute_values = c("A Road", "B Road"),
+  attribute_values = c("A Road", "B Road")
 )
 
 cohesive_network_region_boundary = corenet(combined_net_region_boundary, OS_combined_net_region_boundary, region_boundary,
   key_attribute = "all_fastest_bicycle_go_dutch",
-  crs = "EPSG:27700", maxDistPts = 1500, minDistPts = 2, npt_threshold = min_percentile_value,
+  crs = "EPSG:27700", maxDistPts = 7000, minDistPts = 1500, npt_threshold = min_percentile_value,
   road_scores = list("A Road" = 1, "B Road" = 1), n_removeDangles = 6, penalty_value = 100
 )
 mapview::mapview(cohesive_network_region_boundary)  
