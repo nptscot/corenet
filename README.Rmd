@@ -121,23 +121,19 @@ summary_stats = prepared_network |>
 # Print the summary statistics
 print(summary_stats)
 
-library(dplyr)
-library(sfnetworks)
-
 # # Activate edges and select relevant columns to view
-# route_weights = prepared_network |>
-#   sfnetworks::activate("edges") |>
-#   as_tibble() |>  # Convert to a tibble for easier handling
-#   select(from, to, road_function, go_dutch, weight,penalty)  # Adjust the columns as needed
+route_weights = prepared_network |>
+  sfnetworks::activate("edges") |>
+  as_tibble() |>  # Convert to a tibble for easier handling
+  select(from, to, road_function, value, weight,penalty)  # Adjust the columns as needed
 
-# # View the first few rows in the console
-# print(head(route_weights))
+# View the first few rows in the console
+print(head(route_weights))
 
-# # Or to view a specific number of routes sorted by weight:
-# route_weights_sorted = route_weights |>
-#   arrange(desc(weight))  # Use `arrange(weight)` for ascending order
-# print(head(route_weights_sorted, 20))  # Adjust the number to view more or fewer routes
-
+# Or to view a specific number of routes sorted by weight:
+route_weights_sorted = route_weights |>
+  arrange(desc(weight))  # Use `arrange(weight)` for ascending order
+print(head(route_weights_sorted, 20))  # Adjust the number to view more or fewer routes
 ```
 
 ```{r}
