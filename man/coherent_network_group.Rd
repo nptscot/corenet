@@ -33,5 +33,5 @@ analysis or visualization of critical network pathways.
 \examples{
 # Assuming 'coherent_network' is obtained from a previous function corenet
 # Generate the grouped network
-grouped_network = coherent_network_group(coherent_network)
+# grouped_network = coherent_network_group(coherent_network)
 }

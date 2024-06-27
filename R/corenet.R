@@ -270,7 +270,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 #' @examples
 #' # Assuming 'coherent_network' is obtained from a previous function corenet
 #' # Generate the grouped network
-#' grouped_network = coherent_network_group(coherent_network)
+#' # grouped_network = coherent_network_group(coherent_network)
 coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch", n_group = 12) {
 
   rnet_coherent_selected = coherent_network |>
