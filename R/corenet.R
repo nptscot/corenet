@@ -227,7 +227,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   }
 
   # Prepare network and calculate paths
-  prepared_network = prepare_network(cohesive_base_network, key_attribute , road_scores, transform_crs = crs) 
+  prepared_network = prepare_network(cohesive_base_network, key_attribute , road_scores, transform_crs = crs , penalty_value = penalty_value) 
 
 
   all_paths = purrr::map_dfr(
@@ -339,7 +339,7 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
 #' prepared_network = prepare_network(network, 
 #'                                     key_attribute = "all_fastest_bicycle_go_dutch",
 #'                                     road_scores = road_scores,
-#'                                     transform_crs = 27700)
+#'                                     transform_crs = 27700, penalty_value = 1)
 #'
 #' # Print the prepared network
 #' print(prepared_network)
