@@ -369,7 +369,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
             # Calculate weight considering the road type influence
             weight = round(0.95 * arterialness + 0.05 * road_score, 6), 
             penalty = ifelse(value <= 200 , penalty_value, 1),
-            weight = weight * penalty    
+            weight = weight + penalty    
         )
     # network <- sfnetworks::activate(network, "nodes")
     return(network)
