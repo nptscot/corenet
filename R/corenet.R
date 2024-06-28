@@ -355,6 +355,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
             # Handle NA values and normalize using key_attribute
             value = dplyr::if_else(is.na(!!rlang::sym(key_attribute)), 0, !!rlang::sym(key_attribute)),
             max_value = max(value, na.rm = TRUE),
+            value = ifelse(value <= 50, 0, value),
             value = ifelse(value == 0, 0.01, value),
             # Calculate logarithmic arterialness and round it
             arterialness = ((max_value / value) ^ 3) / max(((max_value / value) ^ 3), na.rm = TRUE),
