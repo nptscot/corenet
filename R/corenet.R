@@ -275,7 +275,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 coherent_network_group = function(coherent_network, key_attribute = "all_fastest_bicycle_go_dutch", n_group = 12) {
 
   rnet_coherent_selected = coherent_network |>
-    dplyr::select({{ key_attribute }}, weight)
+    dplyr::select({{ key_attribute }})
   
   # Group and process the network
   grouped_net = rnet_coherent_selected |>
@@ -287,8 +287,8 @@ coherent_network_group = function(coherent_network, key_attribute = "all_fastest
     sf::st_as_sf() |>
     sf::st_transform("EPSG:4326") |>
     dplyr::group_by(group) |>
-    dplyr::summarise(mean_potential = mean(weight, na.rm = TRUE)) |>
-    dplyr::mutate(group = rank(-mean_potential))  
+    dplyr::summarise(mean_potential  = sum(get(key_attribute), na.rm = TRUE)) |>
+    dplyr::mutate(group  = rank(-mean_potential)) 
 
   return(grouped_net)
 }
