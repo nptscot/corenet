@@ -10,7 +10,8 @@ cohesive_network_prep(
   target_zone,
   crs = "EPSG:27700",
   key_attribute = "road_function",
-  attribute_values = c("A Road", "B Road", "Minor Road")
+  attribute_values = c("A Road", "B Road", "Minor Road"),
+  use_stplanr = TRUE
 )
 }
 \arguments{
@@ -27,6 +28,8 @@ Edinburgh city centre, class 'sf'.}
 \item{key_attribute}{The attribute in the network data to filter by and influence the outcome.}
 
 \item{attribute_values}{Values of the key_attribute to retain in the network.}
+
+\item{use_stplanr}{Logical value indicating whether to use the stplanr package for merging}
 }
 \value{
 A list containing two elements: a cohesive network and zone data, both class 'sf'.
