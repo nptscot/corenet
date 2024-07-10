@@ -2,7 +2,7 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -18,6 +18,7 @@ utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle
 #' @param crs Coordinate reference system to use, default is "EPSG:27700".
 #' @param key_attribute The attribute in the network data to filter by and influence the outcome.
 #' @param attribute_values Values of the key_attribute to retain in the network.
+#' @param use_stplanr Logical value indicating whether to use the stplanr package for merging
 #' 
 #' @return A list containing two elements: a cohesive network and zone data, both class 'sf'.
 #' @export
@@ -45,7 +46,7 @@ utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle
 #'
 
 
-cohesive_network_prep = function(base_network, influence_network, target_zone, crs = "EPSG:27700",  key_attribute = "road_function", attribute_values = c("A Road", "B Road", "Minor Road")) {
+cohesive_network_prep = function(base_network, influence_network, target_zone, crs = "EPSG:27700",  key_attribute = "road_function", attribute_values = c("A Road", "B Road", "Minor Road"), use_stplanr = TRUE) {
     base_network = sf::st_transform(base_network, crs)    
     influence_network = sf::st_transform(influence_network, crs)
     target_zone = sf::st_transform(target_zone, crs)
@@ -61,25 +62,32 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
                         dplyr::filter(!!rlang::sym(key_attribute) %in% attribute_values ) |> 
                         sf::st_transform(crs) |> 
                         sf::st_zm()
-
-    # Assign functions for data aggregation based on network attribute_values 
-    name_list = names(NPT_zones)
-
-    funs = list()
-    for (name in name_list) {
-      if (name == "geometry") {
-        next  # Correctly skip the current iteration if the name is "geometry"
-      } else if (name %in% c("gradient", "quietness")) {
-        funs[[name]] = mean  # Assign mean function for specified fields
-      } else {
-        funs[[name]] = sum  # Assign sum function for all other fields
+    if (use_stplanr) {
+      # Assign functions for data aggregation based on network attribute values 
+      name_list = names(NPT_zones)
+      
+      funs = list()
+      for (name in name_list) {
+        if (name == "geometry") {
+          next  # Correctly skip the current iteration if the name is "geometry"
+        } else if (name %in% c("gradient", "quietness")) {
+          funs[[name]] = mean  # Assign mean function for specified fields
+        } else {
+          funs[[name]] = sum  # Assign sum function for all other fields
+        }
       }
+      
+      # Merge road networks with specified parameters
+      filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20, max_angle_diff = 10)
+    } else {
+      print("Using sf::st_join")
+      filtered_OS_NPT_zones = sf::st_join(filtered_OS_zones, NPT_zones, join = sf::st_intersects)
     }
-
-    # Merge road networks with specified parameters
-    filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20,max_angle_diff = 10)
+    
     filtered_OS_NPT_zones = filtered_OS_NPT_zones |>
                             dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.integer))
+
+
   print("Finished preparing the network data")
   
   return(filtered_OS_NPT_zones)
