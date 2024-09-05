@@ -73,7 +73,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
         } else if (name %in% c("gradient", "quietness")) {
           funs[[name]] = mean  # Assign mean function for specified fields
         } else {
-          funs[[name]] = sum  # Assign sum function for all other fields
+          funs[[name]] = mean  # Assign sum function for all other fields
         }
       }
       
