@@ -73,7 +73,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
         } else if (name %in% c("gradient", "quietness")) {
           funs[[name]] = mean  # Assign mean function for specified fields
         } else {
-          funs[[name]] = sum  # Assign sum function for all other fields
+          funs[[name]] = mean  # Assign sum function for all other fields
         }
       }
       
@@ -422,9 +422,13 @@ calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDi
 
     # Calculate distances between point and centroids
     distances = sf::st_distance(point_geom, centroids_geom)
+    distances_vector <- as.vector(distances[1, ])
+    distances_vector <- units::set_units(distances_vector, "m")
 
-    # Filter centroids based on the distance criteria
-    valid_centroids = centroids[distances >= units::set_units(minDistPts, "m") & distances <= units::set_units(maxDistPts, "m"),]
+    valid_centroids <- centroids[
+      distances_vector >= units::set_units(minDistPts, "m") &
+      distances_vector <= units::set_units(maxDistPts, "m"),
+    ]
 
     if (nrow(valid_centroids) > 0) {
         # Define weights based on path_type
