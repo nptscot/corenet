@@ -66,14 +66,16 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
       # Assign functions for data aggregation based on network attribute values 
       name_list = names(NPT_zones)
       
-    funs = list()
-    for (name in name_list) {
-      if (name == "geometry") {
-        next  # Correctly skip the current iteration if the name is "geometry"
-      } else {
-        funs[[name]] = mean  # Assign mean function for all other fields
+      funs = list()
+      for (name in name_list) {
+        if (name == "geometry") {
+          next  # Correctly skip the current iteration if the name is "geometry"
+        } else if (name %in% c("gradient", "quietness")) {
+          funs[[name]] = mean  # Assign mean function for specified fields
+        } else {
+          funs[[name]] = sum  # Assign sum function for all other fields
+        }
       }
-    }
       
       # Merge road networks with specified parameters
       filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20, max_angle_diff = 10)
