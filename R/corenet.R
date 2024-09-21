@@ -543,12 +543,29 @@ removeDangles = function(network, tolerance = 0.001) {
 #' @export
 #' 
 create_coherent_network_PMtiles = function(folder_path, city_filename, cohesive_network) {
+  # Check geometry types of the cohesive_network
+  geometry_types = sf::st_geometry_type(cohesive_network)
+
+  # Handle LINESTRING geometries
+  cohesive_network_linestring = cohesive_network[geometry_types == "LINESTRING", ]
+
+  # Handle MULTILINESTRING geometries
+  cohesive_network_multilinestring = cohesive_network[geometry_types == "MULTILINESTRING", ]
+  cohesive_network_multilinestring = sf::st_cast(cohesive_network_multilinestring, "LINESTRING")
+
+  # Handle other geometries (e.g., POINT or POLYGON)
+  cohesive_network_others = cohesive_network[geometry_types != "LINESTRING" & geometry_types != "MULTILINESTRING", ]
+
+  # Combine LINESTRING and casted MULTILINESTRING geometries
+  cohesive_network_combined = rbind(cohesive_network_linestring, cohesive_network_multilinestring)
+
   # Generate filenames for GeoJSON and pmtiles outputs
-  coherent_geojson_filename = paste0(folder_path, city_filename, "_coherent_network",  ".geojson")
-  # save coherent_geojson_filename as geojson
-  sf::st_write(cohesive_network, coherent_geojson_filename, delete_dsn = TRUE)
+  coherent_geojson_filename = paste0(folder_path, city_filename, "_coherent_network", ".geojson")
   
-  coherent_pmtiles_filename = paste0(folder_path, city_filename, "_coherent_network",  ".pmtiles")
+  # Save cohesive_network_combined as GeoJSON
+  sf::st_write(cohesive_network_combined, coherent_geojson_filename, delete_dsn = TRUE)
+  
+  coherent_pmtiles_filename = paste0(folder_path, city_filename, "_coherent_network", ".pmtiles")
   
   # Construct the Tippecanoe command
   command_tippecanoe = paste0(
@@ -568,5 +585,7 @@ create_coherent_network_PMtiles = function(folder_path, city_filename, cohesive_
   
   # Execute the command and capture output
   system_output = system(command_tippecanoe, intern = TRUE)
+  
   return(system_output)
 }
+
