@@ -168,7 +168,12 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
     # filter unique_centroids by the buffer
     unique_centroids = sf::st_intersection(unique_centroids, cohesive_base_network_buffer)
-    
+
+    if ("name_1" %in% colnames(unique_centroids)) {
+        unique_centroids = unique_centroids |>
+            group_by(name_1) |>
+            summarise(geometry = st_centroid(st_union(geometry)))
+    }
   } else {
     warning(paste0("Warning: ", key_attribute, " does not exist in the network"))
     # grid_sf = target_zone
@@ -377,12 +382,12 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
             }),
             # Calculate weight considering the road type influence
             weight = round(0.95 * arterialness + 0.05 * road_score, 6), 
-            penalty <- ifelse(value == 0, 1000000, 
-                    ifelse(value < 0 & value < 200, 10000, 
-                           ifelse(value <= 200, penalty_value, 1))),
+            penalty = ifelse(is.na(value) | value == 0, 1000000, 
+                  ifelse(value < 0 & value < 200, 10000, 
+                         ifelse(value <= 200, penalty_value, 1))),
             weight = weight * penalty    
         )
-    # network <- sfnetworks::activate(network, "nodes")
+    # network = sfnetworks::activate(network, "nodes")
     return(network)
 }
 
@@ -424,10 +429,10 @@ calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDi
 
     # Calculate distances between point and centroids
     distances = sf::st_distance(point_geom, centroids_geom)
-    distances_vector <- as.vector(distances[1, ])
-    distances_vector <- units::set_units(distances_vector, "m")
+    distances_vector = as.vector(distances[1, ])
+    distances_vector = units::set_units(distances_vector, "m")
 
-    valid_centroids <- centroids[
+    valid_centroids = centroids[
       distances_vector >= units::set_units(minDistPts, "m") &
       distances_vector <= units::set_units(maxDistPts, "m"),
     ]

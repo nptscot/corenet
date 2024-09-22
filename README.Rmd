@@ -86,6 +86,9 @@ sf::st_crs(os_edinburgh_demo_6km) = 27700
 ```
 
 ```{r}
+os_edinburgh = sf::st_read("inputdata/open_roads_scotland.gpkg")
+os_edinburgh_demo_6km = os_edinburgh[st_union(target_zone), , op = st_intersects]
+
 OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km, 
                                      influence_network = NPT_demo_6km, 
                                      target_zone, 
@@ -139,10 +142,12 @@ print(head(route_weights_sorted, 20))  # Adjust the number to view more or fewer
 ```{r}
 #rename NPT_MM_OSM$geom as NPT_MM_OSM$geometry
 OS_NPT_demo$geometry = OS_NPT_demo$geom
+system.time({
 CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100, penalty_value = 1))   
+                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1)    
+})
 mapview::mapview(CN_network, color = "blue")
 ```
 
