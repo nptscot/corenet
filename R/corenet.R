@@ -171,8 +171,8 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
     if ("name_1" %in% colnames(unique_centroids)) {
         unique_centroids = unique_centroids |>
-            group_by(name_1) |>
-            summarise(geometry = st_centroid(st_union(geometry)))
+            dplyr::group_by(name_1) |>
+            dplyr::summarise(geometry = st_centroid(st_union(geometry)))
     }
   } else {
     warning(paste0("Warning: ", key_attribute, " does not exist in the network"))
@@ -382,9 +382,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
             }),
             # Calculate weight considering the road type influence
             weight = round(0.95 * arterialness + 0.05 * road_score, 6), 
-            penalty = ifelse(is.na(value) | value == 0, 1000000, 
-                  ifelse(value < 0 & value < 200, 10000, 
-                         ifelse(value <= 200, penalty_value, 1))),
+            penalty = ifelse(value <= 200, penalty_value, 1),
             weight = weight * penalty    
         )
     # network = sfnetworks::activate(network, "nodes")

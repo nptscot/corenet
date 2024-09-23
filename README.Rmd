@@ -80,15 +80,18 @@ devtools::load_all()
 The package comes with example data for testing functions.
 You can test the functions as follows:
 ```{r}
+library(sf)
+library(dplyr)
 target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")
 sf::st_crs(NPT_demo_6km) = 27700
 sf::st_crs(os_edinburgh_demo_6km) = 27700
 ```
 
-```{r}
-os_edinburgh = sf::st_read("inputdata/open_roads_scotland.gpkg")
-os_edinburgh_demo_6km = os_edinburgh[st_union(target_zone), , op = st_intersects]
+coherent network generation for Edinburgh city (using old input data: slow)
+   user  system elapsed 
+ 894.13   14.56  908.35
 
+```{r}
 OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km, 
                                      influence_network = NPT_demo_6km, 
                                      target_zone, 
@@ -96,6 +99,41 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
                                      key_attribute = "road_function", 
                                      attribute_values = c("A Road", "B Road", "Minor Road"), use_stplanr = FALSE)
 # mapview::mapview(OS_NPT_demo, color = "blue") + mapview::mapview(NPT_demo_6km, color = "red")
+```
+```{r}
+#rename NPT_MM_OSM$geom as NPT_MM_OSM$geometry
+OS_NPT_demo$geometry = OS_NPT_demo$geom
+system.time({
+CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+                      key_attribute = "all_fastest_bicycle_go_dutch", 
+                      crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
+                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1)    
+})
+mapview::mapview(CN_network, color = "blue")
+
+```
+
+improved coherent network generation for Edinburgh city 
+   user  system elapsed 
+ 115.41    3.99  119.30
+
+```{r}
+os_edinburgh_demo_6km_new = sf::st_read("https://github.com/nptscot/corenet/releases/download/testing_data/os_edinburgh_demo_6km_new.geojson")
+
+OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km_new, 
+                                     influence_network = NPT_demo_6km, 
+                                     target_zone, 
+                                     crs = "EPSG:27700", 
+                                     key_attribute = "road_function", 
+                                     attribute_values = c("A Road", "B Road", "Minor Road"), use_stplanr = FALSE)
+
+system.time({
+CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+                      key_attribute = "all_fastest_bicycle_go_dutch", 
+                      crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
+                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1)    
+})
+mapview::mapview(CN_network, color = "blue")                                     
 ```
 
 ```{r}
@@ -137,18 +175,6 @@ print(head(route_weights))
 route_weights_sorted = route_weights |>
   arrange(desc(weight))  # Use `arrange(weight)` for ascending order
 print(head(route_weights_sorted, 20))  # Adjust the number to view more or fewer routes
-```
-
-```{r}
-#rename NPT_MM_OSM$geom as NPT_MM_OSM$geometry
-OS_NPT_demo$geometry = OS_NPT_demo$geom
-system.time({
-CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
-                      key_attribute = "all_fastest_bicycle_go_dutch", 
-                      crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1)    
-})
-mapview::mapview(CN_network, color = "blue")
 ```
 
 ```{r}
