@@ -2,7 +2,7 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr", "group_column"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -112,6 +112,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param road_scores A list of road types and their corresponding scoring weights.
 #' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
 #' @param penalty_value The penalty value for roads with low values, default is 1.
+#' @param group_column The column name to group the network by edge betweenness, default is "name_1".
 #' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
 #' @examples
@@ -144,7 +145,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000),n_removeDangles = 6,penalty_value = 1)
 #'
 
-corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000), n_removeDangles = 6 , penalty_value = 1) {
+corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000), n_removeDangles = 6 , penalty_value = 1, group_column = "name_1") {
 
   if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
@@ -169,10 +170,52 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
     # filter unique_centroids by the buffer
     unique_centroids = sf::st_intersection(unique_centroids, cohesive_base_network_buffer)
 
-    if ("name_1" %in% colnames(unique_centroids)) {
-        unique_centroids = unique_centroids |>
-            dplyr::group_by(name_1) |>
-            dplyr::summarise(geometry = st_centroid(st_union(geometry)))
+    if (!is.null(group_column)) {
+      tryCatch({
+        if (group_column %in% colnames(unique_centroids)) {
+          # Ensure point_type column exists
+          unique_centroids$point_type = "original_point"
+
+          unique_centroids = unique_centroids |>
+            group_by(!!sym(group_column)) |>
+            group_modify(~ {
+              # Compute the centroid of the group
+              group_centroid = sf::st_union(.x$geometry) |> sf::st_centroid()
+              centroid_row = .x[1, ]
+              centroid_row$geometry = group_centroid
+              centroid_row$point_type = "centroid"
+
+              if (nrow(.x) < 2) {
+                # For groups with less than 2 points, return the point and centroid
+                # Use rbind to preserve sf class
+                return(rbind(.x, centroid_row))
+              } else {
+                # Compute the distance matrix
+                dist_matrix = st_distance(.x)
+                # Exclude self-distances by setting diagonal to NA
+                diag(dist_matrix) = NA
+                # Find the maximum distance
+                max_dist = max(dist_matrix, na.rm = TRUE)
+                # Get the indices of the two points with maximum distance
+                indices = which(dist_matrix == max_dist, arr.ind = TRUE)[1, ]
+                # Extract the two points
+                max_points = .x[indices, ]
+                max_points$point_type = "max_distance_point"
+                # Combine the two points with the centroid
+                result = rbind(max_points, centroid_row)
+                return(result)
+              }
+            }) |>
+            ungroup()
+
+          # Ensure the result is an sf object
+          unique_centroids = sf::st_as_sf(unique_centroids) |> select(geometry)
+        } else {
+          message(sprintf("Column '%s' does not exist in unique_centroids.", group_column))
+        }
+      }, error = function(e) {
+        message("An error occurred: ", e$message)
+      })
     }
   } else {
     warning(paste0("Warning: ", key_attribute, " does not exist in the network"))

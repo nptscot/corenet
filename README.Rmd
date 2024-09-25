@@ -104,13 +104,13 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
 #rename NPT_MM_OSM$geom as NPT_MM_OSM$geometry
 OS_NPT_demo$geometry = OS_NPT_demo$geom
 system.time({
-CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+CN_network_old = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1)    
 })
 mapview::mapview(CN_network, color = "blue")
-
+CN_network_old = CN_network
 ```
 
 improved coherent network generation for Edinburgh city 
@@ -128,12 +128,12 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km_new,
                                      attribute_values = c("A Road", "B Road", "Minor Road"), use_stplanr = FALSE)
 
 system.time({
-CN_network = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
+CN_network_new = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
                       key_attribute = "all_fastest_bicycle_go_dutch", 
                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
-                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1)    
+                      road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1, group_column = "name_1")    
 })
-mapview::mapview(CN_network, color = "blue")                                     
+mapview::mapview(CN_network_old, color = "blue")  + mapview::mapview(CN_network_new, color = "red")                                    
 ```
 
 ```{r}
