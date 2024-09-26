@@ -115,7 +115,7 @@ CN_network_old = CN_network
 
 improved coherent network generation for Edinburgh city 
    user  system elapsed 
- 115.41    3.99  119.30
+ 162.02    5.14  166.98
 
 ```{r}
 os_edinburgh_demo_6km_new = sf::st_read("https://github.com/nptscot/corenet/releases/download/testing_data/os_edinburgh_demo_6km_new.geojson")
