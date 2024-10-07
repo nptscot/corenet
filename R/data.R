@@ -53,6 +53,18 @@
 #' data(NPT_demo_6km)
 #' head(NPT_demo_6km)
 "NPT_demo_6km"
+NULL
 
-
+#' Central Leeds OSM Network
+#' 
+#' See the `data-raw` folder for the code used to generate this data set.
+#' 
+#' @docType data
+#' @keywords datasets
+#' @name central_leeds_osm
+#' @format An object of class \code{sf} (inherits from \code{data.frame}).
+#' @examples
+#' head(central_leeds_osm)
+#' library(sf) # for plotting
+#' plot(central_leeds_osm$geometry)
 NULL

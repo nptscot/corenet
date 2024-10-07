@@ -1,0 +1,25 @@
+---
+format: gfm
+---
+
+The aim of this script is to generate a minimal example route network dataset for central Leeds for use in the package and testing.
+
+```{r, eval=FALSE, echo=FALSE}
+# Test removeDangles
+library(tidyverse)
+headrow = central_leeds_osm |> 
+  filter(name == "The Headrow")
+plot(headrow$geometry)
+central_leeds = sf::st_buffer(headrow, 100)
+sf::sf_use_s2(FALSE)
+central_leeds_osm = osmactive::get_travel_network(central_leeds, boundary = central_leeds, boundary_type = "clipsrc")
+
+plot(central_leeds_osm$geometry)
+central_leeds_nodangle_10 = removeDangles(central_leeds_osm, tolerance = 10)
+central_leeds_nodangle_default = removeDangles(central_leeds_osm)
+plot(central_leeds_nodangle_10$geometry) # it works!
+plot(central_leeds_nodangle_default$geometry)
+
+usethis::use_data(central_leeds_osm, overwrite = TRUE)
+
+```
