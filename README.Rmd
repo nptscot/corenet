@@ -600,3 +600,13 @@ cycle_network = function(area, NPT_network, length_threshold = 1) {
     return(summarized_data)
 }
 ```
+
+```{r, eval=FALSE, echo=FALSE}
+# Test removeDangles
+central_leeds = zonebuilder::zb_zone("Leeds", n_circles = 1) 
+central_leeds_osm = osmactive::get_travel_network(central_leeds, boundary = central_leeds, boundary_type = "clipsrc")
+plot(central_leeds_osm$geometry)
+central_leeds_nodangle_10 = removeDangles(central_leeds_osm, tolerance = 10)
+central_leeds_nodangle_default = removeDangles(central_leeds_osm)
+plot(central_leeds_nodangle_10$geometry) # it works!
+```
