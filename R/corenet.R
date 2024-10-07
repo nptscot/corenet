@@ -580,6 +580,22 @@ removeDangles = function(network, tolerance = 0.001) {
 }
 
 
+removeDangles_geos = function(network, tolerance = 0.001, tol_distance) {
+  network = geos::as_geos_geometry(central_leeds_osm)
+  network_linestring = geos::geos_unnest(network, keep_multi = FALSE)
+  coordinates_start = geos::geos_point_start(network_linestring)
+  coordinates_end = geos::geos_point_end(network_linestring)
+  coordinates = c(coordinates_start, coordinates_end)
+  coordinates_matrix = data.frame(
+    x = geos::geos_x(coordinates),
+    y = geos::geos_y(coordinates)
+  )
+  # Find the unique coordinates:
+  c_txt = paste0(coordinates_matrix$x, coordinates_matrix$y)
+  c_tbl = table(c_txt)
+}
+
+
 
 #' Create coherent network PMtiles
 #'
