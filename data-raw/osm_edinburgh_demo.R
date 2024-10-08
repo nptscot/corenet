@@ -152,3 +152,57 @@ cycle_net |>
   plot()
 
 usethis::use_data(osm_edinburgh_demo, overwrite = TRUE)
+
+find_component= function(rnet, threshold = 50) {
+
+  sf::st_crs(rnet) = 27700
+
+  # Calculate the distance matrix between features
+  dist_matrix = sf::st_distance(rnet)
+
+  # Convert the threshold to units of meters
+  threshold = units::set_units(threshold, "m")
+
+  # Create a connectivity matrix where connections are based on the threshold distance
+  
+  connectivity_matrix = Matrix::Matrix(dist_matrix < threshold, sparse = TRUE)
+
+  # Create an undirected graph from the adjacency matrix
+  graph = igraph::graph_from_adjacency_matrix(connectivity_matrix, mode = "undirected", diag = FALSE)
+
+  # Find the connected components in the graph
+  components = igraph::components(graph)
+
+  # Assign component membership to the road network
+  rnet$component = components$membership
+
+  # Return the updated road network with component membership
+  return(rnet)
+}
+
+
+lads = sf::read_sf("D:/Github/nptscot/npt/inputdata/boundaries/la_regions_2023.geojson")
+
+target_zone = lads |>
+  dplyr::filter(LAD23NM == "City of Edinburgh") |>
+  sf::st_transform(crs = 27700)
+
+osm = osmactive::get_travel_network("Scotland", boundary = target_zone, boundary_type = "clipsrc")
+cycle_net = osmactive::get_cycling_network(osm)
+drive_net = osmactive::get_driving_network_major(osm)
+cycle_net = osmactive::distance_to_road(cycle_net, drive_net)
+cycle_net = osmactive::classify_cycle_infrastructure(cycle_net)
+# filter cycle_net based on column bicycle is yes dismount adn designated
+cycle_net = cycle_net |>
+  dplyr::filter(bicycle %in% c("yes", "dismount", "designated")) |>
+  dplyr::filter(cycle_segregation == "Separated cycle track") |>
+  dplyr::mutate(length = as.numeric(sf::st_length(geometry))) |>
+  dplyr::filter(length > 1) |>
+  sf::st_transform(crs = 27700)
+
+cycle_net = sf::st_cast(cycle_net, "LINESTRING")  
+cycle_net = cycle_net |> dplyr::select(geometry)
+cycle_net$length = sf::st_length(cycle_net)
+edinburgh_offroad = find_component(cycle_net, threshold = 1)
+
+usethis::use_data(edinburgh_offroad, overwrite = TRUE)

@@ -1,0 +1,495 @@
+---
+format: gfm
+---
+
+# load leeds example data
+
+```{r}
+devtools::load_all()
+
+library(sf)
+library(ggplot2)
+library(patchwork)
+library(mapview)
+library(dplyr)
+library(igraph)
+
+leeds_net = central_leeds_osm
+edin_offroad_net = edinburgh_offroad |> filter(component  == 7)
+```
+
+# load two remove dangles functions
+removeDangles_1
+- Accepts the parameters network (an sf object) and tolerance (default = 0.001).
+- Directly casts the sf object to LINESTRING using sf::st_cast
+- The tolerance parameter sets a distance threshold to determine whether an endpoint is "isolated" (dangle) based on spatial proximity to other points.
+
+removeDangles_2
+- Accepts the parameters network (an sf object) and percentile (default = 0.012).
+- Converts the sf object into an igraph object using sf_to_igraph, enabling the calculation of vertex degrees. This step helps identify vertices with a degree of 1, which are potential dangles.
+- The percentile determines the length threshold for classifying short dangling lines for removal.
+
+Dangle Detection:
+removeDangles_1:
+- Uses spatial operations to detect dangles. It extracts the endpoints of each line segment and creates a spatial buffer around them using the tolerance value.
+- By finding points that do not overlap with other buffered points, it identifies isolated (dangling) endpoints. This is more of a spatial proximity-based method.
+
+removeDangles_2:
+- Uses graph theory to identify dangles. It finds vertices (nodes) with degree 1 (dangles) in the graph representation of the network.
+- It then extracts the first and last coordinates of each line and checks if any endpoints are dangle vertices. This approach focuses on graph-based dangle identification.
+
+```{r}
+removeDangles_1 = function(network, tolerance = 0.001) {
+    geometry_types = sf::st_geometry_type(network)
+    network_linestring = network[geometry_types == "LINESTRING", ]
+    network_others = network[geometry_types != "LINESTRING", ]
+    network_multilinestring = network[geometry_types == "MULTILINESTRING", ]
+    network_multilinestring = sf::st_cast(network_multilinestring, "LINESTRING")
+
+    # Combine with original LINESTRING geometries
+    network_lines = rbind(network_linestring, network_multilinestring)
+    # Extract and combine all end points of line segments
+    end_points = do.call(rbind, lapply(network_lines$geometry, function(line) {
+    endpoints = rbind(sf::st_coordinates(line)[1, ], sf::st_coordinates(line)[nrow(sf::st_coordinates(line)), ])
+    sf::st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = sf::st_crs(network))
+    }))
+
+    # Identify unique end points (potential dangles) using a spatial join to find nearby points
+    buffer_points = sf::st_buffer(end_points, dist = tolerance)
+    overlaps = sf::st_intersects(buffer_points, buffer_points, sparse = FALSE)
+    isolated_points = end_points[rowSums(overlaps) == 1,]
+
+    # Filter out road segments that end in these isolated points
+    segments_with_dangles = sapply(sf::st_geometry(network_lines), function(geom) {
+    ends = sf::st_sfc(sf::st_point(sf::st_coordinates(geom)[1,]), sf::st_point(sf::st_coordinates(geom)[nrow(sf::st_coordinates(geom)),]), crs = sf::st_crs(network))
+    any(sf::st_intersects(ends, isolated_points, sparse = FALSE))
+    })
+
+    network_without_dangles = network_lines[!segments_with_dangles, ]
+
+    return(network_without_dangles)
+}
+
+removeDangles_2 = function(network, percentile = 0.012) {
+
+    network$length = sf::st_length(network)
+    network_g = sf_to_igraph(network)
+    vertex_degrees = degree(network_g)
+
+    dangle_vertices = which(vertex_degrees == 1)
+
+    points = unique(do.call(rbind, lapply(st_geometry(network), function(line) {
+    rbind(st_coordinates(line)[1, ], st_coordinates(line)[nrow(st_coordinates(line)), ])
+    })))
+    # Extract indices of LINESTRINGs to check
+    line_indices = sapply(st_geometry(network), function(line) {
+    coords = st_coordinates(line)
+    c(which(points[,1] == coords[1,1] & points[,2] == coords[1,2]),
+        which(points[,1] == coords[nrow(coords),1] & points[,2] == coords[nrow(coords),2]))
+    })
+
+    # sum of network$length
+    sum_value = sum(network$length)
+    
+    # Median of network$length
+    threshold_length = percentile* sum_value
+    short_dangles = network[(line_indices[1,] %in% dangle_vertices | line_indices[2,] %in% dangle_vertices) & network$length < units::set_units(threshold_length, "meters"), ]
+
+    network_clean = network[!((line_indices[1,] %in% dangle_vertices | line_indices[2,] %in% dangle_vertices) & network$length <  units::set_units(threshold_length, "meters")), ]
+}
+
+sf_to_igraph = function(network_sf) {
+  # network_sf = cycle_net_components_1
+  # Assuming network_sf is LINESTRING
+  points = unique(do.call(rbind, lapply(network_sf$geometry, function(line) {
+    rbind(st_coordinates(line)[1, ], st_coordinates(line)[nrow(st_coordinates(line)), ])
+  })))
+  points = unique(points)
+  edges = do.call(rbind, lapply(network_sf$geometry, function(line) {
+    start = which(points[,1] == st_coordinates(line)[1,1] & points[,2] == st_coordinates(line)[1,2])
+    end = which(points[,1] == st_coordinates(line)[nrow(st_coordinates(line)),1] & points[,2] == st_coordinates(line)[nrow(st_coordinates(line)),2])
+    c(start, end)
+  }))
+  graph = graph_from_edgelist(as.matrix(edges), directed = FALSE)
+  return(graph)
+}
+
+```
+
+# compare removeDangles_1 using leeds network with different tolerance values
+```{r}
+RD_leeds_1 = removeDangles_1(leeds_net, tolerance = 0.001)
+RD_leeds_2 = removeDangles_1(leeds_net, tolerance = 10)
+
+# Plot for network 1
+p1 <- ggplot() +
+  geom_sf(data = leeds_net, color = "gray", size = 1) +
+  geom_sf(data = RD_leeds_1, color = "blue", size = 1) +
+  ggtitle("Network 1") +
+  theme_minimal()
+
+# Plot for network 2
+p2 <- ggplot() +
+  geom_sf(data = leeds_net, color = "gray", size = 1) +
+  geom_sf(data = RD_leeds_2, color = "red", size = 1) +
+  ggtitle("Network 2") +
+  theme_minimal()
+
+# Combine both plots side by side using patchwork
+combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+
+# Display the plot
+print(combined_plot)
+```
+# compare removeDangles_1 and removeDangles_2 using leeds network
+# removeDangles_2 not applicable for leeds network
+```{r}
+# RD1_leeds = removeDangles_1(leeds_net, tolerance = 0.001)
+# RD2_leeds = removeDangles_2(leeds_net, percentile = 0.012)
+
+# # Plot for network 1
+# p1 <- ggplot() +
+#   geom_sf(data = leeds_net, color = "gray", size = 2) +
+#   geom_sf(data = RD1_leeds, color = "blue", size = 1) +
+#   ggtitle("Network 1") +
+#   theme_minimal()
+
+# # Plot for network 2
+# p2 <- ggplot() +
+#   geom_sf(data = leeds_net, color = "gray", size = 2) +
+#   geom_sf(data = RD2_leeds, color = "red", size = 1) +
+#   ggtitle("Network 2") +
+#   theme_minimal()
+
+# # Combine both plots side by side using patchwork
+# combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+
+# # Display the plot
+# print(combined_plot)
+```
+
+# compare removeDangles_1 using edinburgh offroad network with different tolerance values
+
+# result is pretty much same for different tolerance values
+```{r}
+RD_edin_1 = removeDangles_1(edin_offroad_net, tolerance = 0.012)
+RD_edin_2 = removeDangles_1(edin_offroad_net, tolerance = 10)
+
+# Plot for network 1
+p1 <- ggplot() +
+  geom_sf(data = edin_offroad_net, color = "gray", size = 1) +
+  geom_sf(data = RD_edin_1, color = "blue", size = 1) +
+  ggtitle("Network using removeDangles_1_0.012") +
+  theme_minimal()
+
+# Plot for network 2
+p2 <- ggplot() +
+  geom_sf(data = edin_offroad_net, color = "gray", size = 1) +
+  geom_sf(data = RD_edin_2, color = "red", size = 1) +
+  ggtitle("using removeDangles_1_10") +
+  theme_minimal()
+
+# Combine both plots side by side using patchwork
+combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+
+# Display the plot
+print(combined_plot)
+
+mapview(RD_edin_1,color = "blue") + mapview(RD_edin_2,color = "red") + mapview(edin_offroad_net, color = "black")
+```
+
+# compare removeDangles_1 and removeDangles_2 using edinburgh offroad network
+removeDangles_2 is better
+```{r}
+RD1_edin = removeDangles_1(edin_offroad_net, tolerance = 0.001)
+RD2_edin = removeDangles_2(edin_offroad_net, percentile = 0.012)
+
+# Plot for network 1
+p1 <- ggplot() +
+  geom_sf(data = edin_offroad_net, color = "gray", size = 2) +
+  geom_sf(data = RD1_edin, color = "blue", size = 1) +
+  ggtitle("Network using removeDangles_1") +
+  theme_minimal()
+
+# Plot for network 2
+p2 <- ggplot() +
+  geom_sf(data = edin_offroad_net, color = "gray", size = 2) +
+  geom_sf(data = RD2_edin, color = "red", size = 1) +
+  ggtitle("Network using removeDangles_2") +
+  theme_minimal()
+
+# Combine both plots side by side using patchwork
+combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+
+# Display the plot
+print(combined_plot)
+
+mapview(RD1_edin,color = "blue") + mapview(RD2_edin,color = "red") + mapview(edin_offroad_net, color = "black")
+```
+
+# develop a robust removeDangles function
+
+```{r}
+removeDangles_combined_refined = function(network, percentile = 0.012, tolerance = 0.001) {
+
+  # Step 1: Cast to LINESTRING if necessary and handle MULTILINESTRING geometries
+  geometry_types = sf::st_geometry_type(network)
+  network_linestring = network[geometry_types == "LINESTRING", ]
+  network_others = network[geometry_types != "LINESTRING", ]
+  network_multilinestring = network[geometry_types == "MULTILINESTRING", ]
+  network_multilinestring = suppressWarnings(sf::st_cast(network_multilinestring, "LINESTRING"))
+
+  # Combine all LINESTRING geometries
+  network_lines = rbind(network_linestring, network_multilinestring)
+
+  # Step 2: Calculate segment lengths
+  network_lines$length = sf::st_length(network_lines)
+
+  # Step 3: Convert the network to igraph and identify dangling vertices (degree 1) and isolated vertices (degree 0)
+  network_g = sf_to_igraph(network_lines)
+  vertex_degrees = degree(network_g)
+  
+  # Isolated vertices (degree 0) and dangling vertices (degree 1)
+  isolated_vertices = which(vertex_degrees == 0)
+  dangle_vertices = which(vertex_degrees == 1)
+
+  # Identify the largest connected component
+  components = clusters(network_g)
+  largest_component = which(components$membership == which.max(components$csize))
+
+  # Step 4: Extract the first and last coordinates of each road segment
+  points = unique(do.call(rbind, lapply(st_geometry(network_lines), function(line) {
+    coords = st_coordinates(line)
+    rbind(coords[1, ], coords[nrow(coords), ])
+  })))
+
+  # Ensure correct structure of edge list (start and end points)
+  line_indices = sapply(st_geometry(network_lines), function(line) {
+    coords = st_coordinates(line)
+    c(
+      which(points[, 1] == coords[1, 1] & points[, 2] == coords[1, 2]),
+      which(points[, 1] == coords[nrow(coords), 1] & points[, 2] == coords[nrow(coords), 2])
+    )
+  })
+
+  # Step 5: Calculate total network length and define a threshold for short dangles
+  sum_value = sum(network_lines$length)
+  threshold_length = percentile * sum_value
+
+  # Step 6: Spatial proximity check (from removeDangles_1)
+  end_points = do.call(rbind, lapply(network_lines$geometry, function(line) {
+    endpoints = rbind(sf::st_coordinates(line)[1, ], sf::st_coordinates(line)[nrow(sf::st_coordinates(line)), ])
+    sf::st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = sf::st_crs(network))
+  }))
+
+  # Buffer endpoints and check for overlaps
+  buffer_points = sf::st_buffer(end_points, dist = tolerance)
+  overlaps = sf::st_intersects(buffer_points, buffer_points, sparse = FALSE)
+  spatially_isolated_points = end_points[rowSums(overlaps) == 1, ]
+
+  # Step 7: Remove segments that are short dangles or connected to isolated points (degree 0 or 1)
+  segments_with_dangles_or_isolated = sapply(seq_len(length(st_geometry(network_lines))), function(i) {
+    geom = st_geometry(network_lines)[i]
+    ends = sf::st_sfc(
+      sf::st_point(sf::st_coordinates(geom)[1, ]), 
+      sf::st_point(sf::st_coordinates(geom)[nrow(sf::st_coordinates(geom)), ]), 
+      crs = sf::st_crs(network)
+    )
+    
+    # Check if the endpoints are in isolated vertices (degree 0), dangle vertices (degree 1), or spatially isolated points
+    isolated_endpoints = sf::st_intersects(ends, spatially_isolated_points, sparse = FALSE)
+    
+    # Convert to single TRUE or FALSE for isolated points
+    is_isolated = any(rowSums(isolated_endpoints) > 0)
+    
+    # Check if the segment is connected to isolated or dangling vertices
+    is_dangle_or_isolated_vertex = any(line_indices[1, i] %in% isolated_vertices | line_indices[2, i] %in% isolated_vertices) ||
+      any(line_indices[1, i] %in% dangle_vertices | line_indices[2, i] %in% dangle_vertices)
+    
+    # Check if the segment is a short dangle
+    is_short_dangle = (line_indices[1, i] %in% dangle_vertices | line_indices[2, i] %in% dangle_vertices) & 
+      network_lines$length[i] < units::set_units(threshold_length, "meters")
+    
+    # Check if the segment is part of the largest connected component
+    in_largest_component = any(line_indices[1, i] %in% largest_component | line_indices[2, i] %in% largest_component)
+
+    # Return TRUE if any of the conditions are met, but exclude segments in the largest component
+    return((is_isolated || is_dangle_or_isolated_vertex || is_short_dangle) && !in_largest_component)
+  })
+
+  # Remove the identified segments
+  network_clean = network_lines[!segments_with_dangles_or_isolated, ]
+
+  return(network_clean)
+}
+```
+
+```{r}
+new_RD_leeds = removeDangles_combined(leeds_net, percentile = 0.0001, tolerance = 0.0001)
+new_RD_edin = removeDangles_combined(edin_offroad_net, percentile = 0.0001, tolerance = 0.0001)
+
+mapview(leeds_net, color = "black") + mapview(new_RD_leeds, color = "red") 
+mapview(edin_offroad_net, color = "black") + mapview(new_RD_edin, color = "red")
+```
+
+```{r}
+remove_dangles_by_degree = function(network) {
+
+  # Step 1: Cast to LINESTRING if necessary and handle MULTILINESTRING geometries
+  geometry_types = sf::st_geometry_type(network)
+  network_linestring = network[geometry_types == "LINESTRING", ]
+  network_others = network[geometry_types != "LINESTRING", ]
+  network_multilinestring = network[geometry_types == "MULTILINESTRING", ]
+  network_multilinestring = suppressWarnings(sf::st_cast(network_multilinestring, "LINESTRING"))
+
+  # Combine all LINESTRING geometries
+  network_lines = rbind(network_linestring, network_multilinestring)
+
+  # Step 2: Convert the network to igraph and identify dangling (degree 1) and isolated (degree 0) vertices
+  network_g = sf_to_igraph(network_lines)
+  vertex_degrees = degree(network_g)
+
+  # Isolated vertices (degree 0) and dangling vertices (degree 1)
+  isolated_vertices = which(vertex_degrees == 0)
+  dangle_vertices = which(vertex_degrees == 1)
+
+  # Step 3: Extract the first and last coordinates of each road segment
+  points = unique(do.call(rbind, lapply(st_geometry(network_lines), function(line) {
+    coords = st_coordinates(line)
+    rbind(coords[1, ], coords[nrow(coords), ])
+  })))
+
+  # Ensure correct structure of edge list (start and end points)
+  line_indices = sapply(st_geometry(network_lines), function(line) {
+    coords = st_coordinates(line)
+    c(
+      which(points[, 1] == coords[1, 1] & points[, 2] == coords[1, 2]),
+      which(points[, 1] == coords[nrow(coords), 1] & points[, 2] == coords[nrow(coords), 2])
+    )
+  })
+
+  # Step 4: Remove segments that are connected to vertices with degree 1 or 0
+  segments_to_remove = sapply(seq_len(length(st_geometry(network_lines))), function(i) {
+    # Check if the segment's endpoints are connected to isolated (degree 0) or dangling (degree 1) vertices
+    return(any(line_indices[1, i] %in% isolated_vertices | line_indices[2, i] %in% isolated_vertices) ||
+           any(line_indices[1, i] %in% dangle_vertices | line_indices[2, i] %in% dangle_vertices))
+  })
+
+  # Keep only the segments that are NOT connected to vertices with degree 1 or 0
+  network_clean = network_lines[!segments_to_remove, ]
+
+  return(network_clean)
+}
+```
+
+```{r}
+new_RD_leeds = remove_dangles_by_degree(combined_network)
+new_RD_edin = remove_dangles_by_degree(edin_offroad_net)
+
+mapview(leeds_net, color = "black") + mapview(new_RD_leeds, color = "red")
+mapview(edin_offroad_net, color = "black") + mapview(new_RD_edin, color = "red")
+```
+
+```{r}
+library(sf)
+library(units)
+# Step 1: Extract endpoints of each line segment
+endpoints <- do.call(rbind, lapply(st_geometry(combined_network), function(line) {
+  coords <- st_coordinates(line)
+  rbind(coords[1, ], coords[nrow(coords), ])
+}))
+
+# Create an sf object for the endpoints
+endpoints_sf <- st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = st_crs(combined_network))
+
+# Step 2: Calculate distances between endpoints of different lines
+distance_matrix <- st_distance(endpoints_sf)
+
+# Step 3: Set a threshold with proper units (e.g., meters)
+# Use the same units as the distance_matrix (units should match)
+threshold <- set_units(0.001, "m")  # Adjust 0.001 as needed
+
+# Step 4: Detect gaps: Find where the distance between endpoints is larger than the threshold
+gap_indices <- which(as.numeric(distance_matrix) > as.numeric(threshold) & as.numeric(distance_matrix) != 0, arr.ind = TRUE)
+
+# Check if gap_indices is a vector or matrix
+if (is.matrix(gap_indices)) {
+  gap_points <- endpoints_sf[gap_indices[, 1], ]
+} else if (is.vector(gap_indices)) {
+  gap_points <- endpoints_sf[gap_indices, ]
+} else {
+  stop("Unexpected format for gap_indices.")
+}
+
+# Plot the network and gaps
+ggplot() +
+  geom_sf(data = leeds_net, color = "black", size = 0.5) +    # Plot the network lines
+  geom_sf(data = gap_points, color = "red", size = 3) +     # Plot the gap points
+  ggtitle("Network Gaps") +
+  theme_minimal()
+
+
+```
+
+```{r}
+library(sf)
+library(units)
+
+network = leeds_net
+
+# Step 1: Extract endpoints of each line segment
+endpoints <- do.call(rbind, lapply(st_geometry(network), function(line) {
+  coords <- st_coordinates(line)
+  rbind(coords[1, ], coords[nrow(coords), ])
+}))
+
+# Create an sf object for the endpoints
+endpoints_sf <- st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = st_crs(network))
+
+# Ensure that the geometry is cast to POINT type
+endpoints_sf <- st_cast(endpoints_sf, "POINT")
+
+# Step 2: Calculate distances between endpoints of different lines
+distance_matrix <- st_distance(endpoints_sf)
+
+# Step 3: Set a threshold for closing the gaps (e.g., 0.01 meters)
+threshold <- set_units(0.01, "m")
+
+# Detect gaps: Find where the distance between endpoints is larger than 0 and less than the threshold
+gap_indices <- which(as.numeric(distance_matrix) > 0 & as.numeric(distance_matrix) <= as.numeric(threshold), arr.ind = TRUE)
+
+# Check if gaps are detected
+if (length(gap_indices) == 0) {
+  stop("No gaps detected within the specified threshold.")
+}
+
+# Ensure gap_indices is a matrix
+if (!is.matrix(gap_indices)) {
+  gap_indices <- matrix(gap_indices, ncol = 2)
+}
+
+# Step 5: Create new LINESTRING segments to close the gaps
+new_lines <- list()
+for (i in seq_len(nrow(gap_indices))) {
+  # Extract coordinates directly from endpoints_sf using st_coordinates
+  p1 <- st_coordinates(endpoints_sf[gap_indices[i, 1], ])
+  p2 <- st_coordinates(endpoints_sf[gap_indices[i, 2], ])
+  
+  # Create a new LINESTRING connecting the two points
+  new_line <- st_linestring(rbind(p1, p2))
+  new_lines[[i]] <- new_line
+}
+
+# Step 6: Convert the new lines to an sf object
+new_lines_sf <- st_sfc(new_lines, crs = st_crs(network))
+
+# Step 7: Combine the original network with the new line segments
+combined_network <- rbind(network, st_as_sf(new_lines_sf))
+
+# Step 8: Visualize the updated network
+ggplot() +
+  geom_sf(data = combined_network, color = "black", size = 0.5) +   # Plot the combined network (including new lines)
+  ggtitle("Network with Closed Gaps") +
+  theme_minimal()
+
+```
