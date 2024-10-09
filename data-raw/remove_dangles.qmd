@@ -227,269 +227,251 @@ print(combined_plot)
 mapview(RD1_edin,color = "blue") + mapview(RD2_edin,color = "red") + mapview(edin_offroad_net, color = "black")
 ```
 
-# develop a robust removeDangles function
-
+# display the node degree of the network
 ```{r}
-removeDangles_combined_refined = function(network, percentile = 0.012, tolerance = 0.001) {
-
-  # Step 1: Cast to LINESTRING if necessary and handle MULTILINESTRING geometries
-  geometry_types = sf::st_geometry_type(network)
-  network_linestring = network[geometry_types == "LINESTRING", ]
-  network_others = network[geometry_types != "LINESTRING", ]
-  network_multilinestring = network[geometry_types == "MULTILINESTRING", ]
-  network_multilinestring = suppressWarnings(sf::st_cast(network_multilinestring, "LINESTRING"))
-
-  # Combine all LINESTRING geometries
-  network_lines = rbind(network_linestring, network_multilinestring)
-
-  # Step 2: Calculate segment lengths
-  network_lines$length = sf::st_length(network_lines)
-
-  # Step 3: Convert the network to igraph and identify dangling vertices (degree 1) and isolated vertices (degree 0)
-  network_g = sf_to_igraph(network_lines)
-  vertex_degrees = degree(network_g)
-  
-  # Isolated vertices (degree 0) and dangling vertices (degree 1)
-  isolated_vertices = which(vertex_degrees == 0)
-  dangle_vertices = which(vertex_degrees == 1)
-
-  # Identify the largest connected component
-  components = clusters(network_g)
-  largest_component = which(components$membership == which.max(components$csize))
-
-  # Step 4: Extract the first and last coordinates of each road segment
-  points = unique(do.call(rbind, lapply(st_geometry(network_lines), function(line) {
-    coords = st_coordinates(line)
-    rbind(coords[1, ], coords[nrow(coords), ])
-  })))
-
-  # Ensure correct structure of edge list (start and end points)
-  line_indices = sapply(st_geometry(network_lines), function(line) {
-    coords = st_coordinates(line)
-    c(
-      which(points[, 1] == coords[1, 1] & points[, 2] == coords[1, 2]),
-      which(points[, 1] == coords[nrow(coords), 1] & points[, 2] == coords[nrow(coords), 2])
-    )
-  })
-
-  # Step 5: Calculate total network length and define a threshold for short dangles
-  sum_value = sum(network_lines$length)
-  threshold_length = percentile * sum_value
-
-  # Step 6: Spatial proximity check (from removeDangles_1)
-  end_points = do.call(rbind, lapply(network_lines$geometry, function(line) {
-    endpoints = rbind(sf::st_coordinates(line)[1, ], sf::st_coordinates(line)[nrow(sf::st_coordinates(line)), ])
-    sf::st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = sf::st_crs(network))
-  }))
-
-  # Buffer endpoints and check for overlaps
-  buffer_points = sf::st_buffer(end_points, dist = tolerance)
-  overlaps = sf::st_intersects(buffer_points, buffer_points, sparse = FALSE)
-  spatially_isolated_points = end_points[rowSums(overlaps) == 1, ]
-
-  # Step 7: Remove segments that are short dangles or connected to isolated points (degree 0 or 1)
-  segments_with_dangles_or_isolated = sapply(seq_len(length(st_geometry(network_lines))), function(i) {
-    geom = st_geometry(network_lines)[i]
-    ends = sf::st_sfc(
-      sf::st_point(sf::st_coordinates(geom)[1, ]), 
-      sf::st_point(sf::st_coordinates(geom)[nrow(sf::st_coordinates(geom)), ]), 
-      crs = sf::st_crs(network)
-    )
-    
-    # Check if the endpoints are in isolated vertices (degree 0), dangle vertices (degree 1), or spatially isolated points
-    isolated_endpoints = sf::st_intersects(ends, spatially_isolated_points, sparse = FALSE)
-    
-    # Convert to single TRUE or FALSE for isolated points
-    is_isolated = any(rowSums(isolated_endpoints) > 0)
-    
-    # Check if the segment is connected to isolated or dangling vertices
-    is_dangle_or_isolated_vertex = any(line_indices[1, i] %in% isolated_vertices | line_indices[2, i] %in% isolated_vertices) ||
-      any(line_indices[1, i] %in% dangle_vertices | line_indices[2, i] %in% dangle_vertices)
-    
-    # Check if the segment is a short dangle
-    is_short_dangle = (line_indices[1, i] %in% dangle_vertices | line_indices[2, i] %in% dangle_vertices) & 
-      network_lines$length[i] < units::set_units(threshold_length, "meters")
-    
-    # Check if the segment is part of the largest connected component
-    in_largest_component = any(line_indices[1, i] %in% largest_component | line_indices[2, i] %in% largest_component)
-
-    # Return TRUE if any of the conditions are met, but exclude segments in the largest component
-    return((is_isolated || is_dangle_or_isolated_vertex || is_short_dangle) && !in_largest_component)
-  })
-
-  # Remove the identified segments
-  network_clean = network_lines[!segments_with_dangles_or_isolated, ]
-
-  return(network_clean)
-}
-```
-
-```{r}
-new_RD_leeds = removeDangles_combined(leeds_net, percentile = 0.0001, tolerance = 0.0001)
-new_RD_edin = removeDangles_combined(edin_offroad_net, percentile = 0.0001, tolerance = 0.0001)
-
-mapview(leeds_net, color = "black") + mapview(new_RD_leeds, color = "red") 
-mapview(edin_offroad_net, color = "black") + mapview(new_RD_edin, color = "red")
-```
-
-```{r}
-remove_dangles_by_degree = function(network) {
-
-  # Step 1: Cast to LINESTRING if necessary and handle MULTILINESTRING geometries
-  geometry_types = sf::st_geometry_type(network)
-  network_linestring = network[geometry_types == "LINESTRING", ]
-  network_others = network[geometry_types != "LINESTRING", ]
-  network_multilinestring = network[geometry_types == "MULTILINESTRING", ]
-  network_multilinestring = suppressWarnings(sf::st_cast(network_multilinestring, "LINESTRING"))
-
-  # Combine all LINESTRING geometries
-  network_lines = rbind(network_linestring, network_multilinestring)
-
-  # Step 2: Convert the network to igraph and identify dangling (degree 1) and isolated (degree 0) vertices
-  network_g = sf_to_igraph(network_lines)
-  vertex_degrees = degree(network_g)
-
-  # Isolated vertices (degree 0) and dangling vertices (degree 1)
-  isolated_vertices = which(vertex_degrees == 0)
-  dangle_vertices = which(vertex_degrees == 1)
-
-  # Step 3: Extract the first and last coordinates of each road segment
-  points = unique(do.call(rbind, lapply(st_geometry(network_lines), function(line) {
-    coords = st_coordinates(line)
-    rbind(coords[1, ], coords[nrow(coords), ])
-  })))
-
-  # Ensure correct structure of edge list (start and end points)
-  line_indices = sapply(st_geometry(network_lines), function(line) {
-    coords = st_coordinates(line)
-    c(
-      which(points[, 1] == coords[1, 1] & points[, 2] == coords[1, 2]),
-      which(points[, 1] == coords[nrow(coords), 1] & points[, 2] == coords[nrow(coords), 2])
-    )
-  })
-
-  # Step 4: Remove segments that are connected to vertices with degree 1 or 0
-  segments_to_remove = sapply(seq_len(length(st_geometry(network_lines))), function(i) {
-    # Check if the segment's endpoints are connected to isolated (degree 0) or dangling (degree 1) vertices
-    return(any(line_indices[1, i] %in% isolated_vertices | line_indices[2, i] %in% isolated_vertices) ||
-           any(line_indices[1, i] %in% dangle_vertices | line_indices[2, i] %in% dangle_vertices))
-  })
-
-  # Keep only the segments that are NOT connected to vertices with degree 1 or 0
-  network_clean = network_lines[!segments_to_remove, ]
-
-  return(network_clean)
-}
-```
-
-```{r}
-new_RD_leeds = remove_dangles_by_degree(combined_network)
-new_RD_edin = remove_dangles_by_degree(edin_offroad_net)
-
-mapview(leeds_net, color = "black") + mapview(new_RD_leeds, color = "red")
-mapview(edin_offroad_net, color = "black") + mapview(new_RD_edin, color = "red")
-```
-
-```{r}
+# Load necessary libraries
 library(sf)
-library(units)
-# Step 1: Extract endpoints of each line segment
-endpoints <- do.call(rbind, lapply(st_geometry(combined_network), function(line) {
-  coords <- st_coordinates(line)
-  rbind(coords[1, ], coords[nrow(coords), ])
-}))
+library(igraph)
+library(dplyr)
+library(ggplot2)
+library(tidyr)  # Load tidyr for the separate function
 
-# Create an sf object for the endpoints
-endpoints_sf <- st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = st_crs(combined_network))
+# Extract edges (line segments)
+edges <- st_cast(leeds_net, "LINESTRING")
 
-# Step 2: Calculate distances between endpoints of different lines
-distance_matrix <- st_distance(endpoints_sf)
+# Extract start and end coordinates of each line segment
+edge_list <- st_coordinates(edges) %>%
+  as.data.frame() %>%
+  group_by(L1) %>%
+  summarize(
+    x_start = first(X),
+    y_start = first(Y),
+    x_end = last(X),
+    y_end = last(Y)
+  )
+# Create node identifiers by concatenating coordinates
+edges_df <- edge_list %>%
+  mutate(
+    from = paste(x_start, y_start, sep = ","),
+    to = paste(x_end, y_end, sep = ",")
+  ) %>%
+  select(from, to)
+# Create an undirected graph
+g <- graph_from_data_frame(edges_df, directed = FALSE)
+# Calculate the degree of each node
+node_degree <- degree(g)
 
-# Step 3: Set a threshold with proper units (e.g., meters)
-# Use the same units as the distance_matrix (units should match)
-threshold <- set_units(0.001, "m")  # Adjust 0.001 as needed
+# Convert node_degree to a data frame
+node_degree_df <- data.frame(
+  node = names(node_degree),
+  degree = node_degree
+)
 
-# Step 4: Detect gaps: Find where the distance between endpoints is larger than the threshold
-gap_indices <- which(as.numeric(distance_matrix) > as.numeric(threshold) & as.numeric(distance_matrix) != 0, arr.ind = TRUE)
+# Split the node coordinates back into separate columns
+node_degree_df <- node_degree_df %>%
+  separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
 
-# Check if gap_indices is a vector or matrix
-if (is.matrix(gap_indices)) {
-  gap_points <- endpoints_sf[gap_indices[, 1], ]
-} else if (is.vector(gap_indices)) {
-  gap_points <- endpoints_sf[gap_indices, ]
-} else {
-  stop("Unexpected format for gap_indices.")
+# Convert node_degree_df back to sf object
+node_degree_sf <- st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(4326))
+
+mapview(node_degree_sf, zcol = "degree") + mapview(leeds_net)
+```
+
+
+# new remove dangles function
+```{r}
+remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative = TRUE) {
+  # Load necessary libraries
+  library(sf)
+  library(igraph)
+  library(dplyr)
+  library(tidyr)  # For the 'separate' function
+  
+  # Step 1: Transform to Projected CRS
+  projected_crs <- st_crs(crs_proj)
+  network_proj <- st_transform(network, crs = projected_crs)
+  
+  # Step 2: Node the Network (Split Lines at Intersections)
+  network_noded <- st_union(network_proj)
+  network_noded <- st_line_merge(network_noded)
+  network_noded_sf <- st_cast(network_noded, "LINESTRING")
+  
+  # Step 3: Snap the Network to Itself (Optional, can be skipped if not needed)
+  threshold <- units::set_units(tolerance, "m")
+  network_snapped <- st_snap(network_noded_sf, st_union(network_noded_sf), tolerance = threshold)
+  
+  # Step 4: Extract Edges (Line Segments)
+  edges <- st_cast(network_snapped, "LINESTRING")
+  
+  # Step 5: Create Edge List with Start and End Coordinates
+  edge_list <- st_coordinates(edges) %>%
+    as.data.frame() %>%
+    group_by(L1) %>%
+    summarize(
+      x_start = first(X),
+      y_start = first(Y),
+      x_end = last(X),
+      y_end = last(Y)
+    )
+  
+  # Step 6: Create Node Identifiers
+  edges_df <- edge_list %>%
+    mutate(
+      from = paste(x_start, y_start, sep = ","),
+      to = paste(x_end, y_end, sep = ",")
+    ) %>%
+    select(from, to)
+  
+  # Step 7: Create Graph
+  g <- graph_from_data_frame(edges_df, directed = FALSE)
+  
+  # Step 8: Remove Dangles (Iteratively or Once)
+  if (iterative) {
+    # Iterative Removal of Dangles
+    repeat {
+      # Calculate Node Degrees
+      node_degree <- degree(g)
+      
+      # Break the loop if no nodes with degree 1 are left
+      if (all(node_degree > 1)) {
+        break
+      }
+      
+      # Identify Nodes with Degree 1
+      node_degree_df <- data.frame(
+        node = names(node_degree),
+        degree = node_degree
+      ) %>%
+        separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
+      
+      # Identify Dangle Nodes
+      dangle_nodes <- node_degree_df %>% filter(degree == 1)
+      
+      # Create Node Info for Joining
+      node_info <- node_degree_df
+      
+      # Merge Edge List with Node Degrees to Identify Edges Connected to Dangle Nodes
+      edges_with_nodes <- edge_list %>%
+        mutate(
+          from = paste(x_start, y_start, sep = ","),
+          to = paste(x_end, y_end, sep = ",")
+        ) %>%
+        left_join(
+          node_info %>%
+            mutate(node = paste(X, Y, sep = ",")),
+          by = c("from" = "node")
+        ) %>%
+        rename(degree_from = degree) %>%
+        left_join(
+          node_info %>%
+            mutate(node = paste(X, Y, sep = ",")),
+          by = c("to" = "node")
+        ) %>%
+        rename(degree_to = degree)
+      
+      # Identify Edges Connected to Dangle Nodes
+      dangle_edges_indices <- edges_with_nodes %>%
+        filter(degree_from == 1 | degree_to == 1) %>%
+        pull(L1)
+      
+      # Break if No Dangle Edges are Found
+      if (length(dangle_edges_indices) == 0) {
+        break
+      }
+      
+      # Remove Dangle Edges
+      edges <- edges[-dangle_edges_indices, ]
+      
+      # Reconstruct Edge List and Graph for Next Iteration
+      edge_list <- st_coordinates(edges) %>%
+        as.data.frame() %>%
+        group_by(L1) %>%
+        summarize(
+          x_start = first(X),
+          y_start = first(Y),
+          x_end = last(X),
+          y_end = last(Y)
+        )
+      
+      edges_df <- edge_list %>%
+        mutate(
+          from = paste(x_start, y_start, sep = ","),
+          to = paste(x_end, y_end, sep = ",")
+        ) %>%
+        select(from, to)
+      
+      g <- graph_from_data_frame(edges_df, directed = FALSE)
+    }
+  } else {
+    # Single Removal of Dangles
+    # Calculate Node Degrees
+    node_degree <- degree(g)
+    
+    # Identify Nodes with Degree 1
+    node_degree_df <- data.frame(
+      node = names(node_degree),
+      degree = node_degree
+    ) %>%
+      separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
+    
+    # Create Node Info for Joining
+    node_info <- node_degree_df
+    
+    # Merge Edge List with Node Degrees to Identify Edges Connected to Dangle Nodes
+    edges_with_nodes <- edge_list %>%
+      mutate(
+        from = paste(x_start, y_start, sep = ","),
+        to = paste(x_end, y_end, sep = ",")
+      ) %>%
+      left_join(
+        node_info %>%
+          mutate(node = paste(X, Y, sep = ",")),
+        by = c("from" = "node")
+      ) %>%
+      rename(degree_from = degree) %>%
+      left_join(
+        node_info %>%
+          mutate(node = paste(X, Y, sep = ",")),
+        by = c("to" = "node")
+      ) %>%
+      rename(degree_to = degree)
+    
+    # Identify Edges Connected to Dangle Nodes
+    dangle_edges_indices <- edges_with_nodes %>%
+      filter(degree_from == 1 | degree_to == 1) %>%
+      pull(L1)
+    
+    # Remove Dangle Edges
+    edges <- edges[-dangle_edges_indices, ]
+  }
+  
+  # Step 9: Return the Cleaned Network
+  # Transform Back to Original CRS
+  cleaned_network <- st_transform(edges, st_crs(network))
+  
+  return(cleaned_network)
 }
 
-# Plot the network and gaps
+```
+
+# apply to leeds network and edinburgh offroad network
+
+```{r}
+cleaned_leeds <- remove_dangles(leeds_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
+
+cleaned_edin <- remove_dangles(edin_offroad_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
+
 ggplot() +
-  geom_sf(data = leeds_net, color = "black", size = 0.5) +    # Plot the network lines
-  geom_sf(data = gap_points, color = "red", size = 3) +     # Plot the gap points
-  ggtitle("Network Gaps") +
+  geom_sf(data = leeds_net, color = "black", size = 2, alpha = 2) +
+  geom_sf(data = cleaned_leeds, color = "red", size = 2) +
+  ggtitle("Original Network (Red) vs Cleaned Network (Black)") +
   theme_minimal()
 
-
-```
-
-```{r}
-library(sf)
-library(units)
-
-network = leeds_net
-
-# Step 1: Extract endpoints of each line segment
-endpoints <- do.call(rbind, lapply(st_geometry(network), function(line) {
-  coords <- st_coordinates(line)
-  rbind(coords[1, ], coords[nrow(coords), ])
-}))
-
-# Create an sf object for the endpoints
-endpoints_sf <- st_as_sf(data.frame(x = endpoints[, 1], y = endpoints[, 2]), coords = c("x", "y"), crs = st_crs(network))
-
-# Ensure that the geometry is cast to POINT type
-endpoints_sf <- st_cast(endpoints_sf, "POINT")
-
-# Step 2: Calculate distances between endpoints of different lines
-distance_matrix <- st_distance(endpoints_sf)
-
-# Step 3: Set a threshold for closing the gaps (e.g., 0.01 meters)
-threshold <- set_units(0.01, "m")
-
-# Detect gaps: Find where the distance between endpoints is larger than 0 and less than the threshold
-gap_indices <- which(as.numeric(distance_matrix) > 0 & as.numeric(distance_matrix) <= as.numeric(threshold), arr.ind = TRUE)
-
-# Check if gaps are detected
-if (length(gap_indices) == 0) {
-  stop("No gaps detected within the specified threshold.")
-}
-
-# Ensure gap_indices is a matrix
-if (!is.matrix(gap_indices)) {
-  gap_indices <- matrix(gap_indices, ncol = 2)
-}
-
-# Step 5: Create new LINESTRING segments to close the gaps
-new_lines <- list()
-for (i in seq_len(nrow(gap_indices))) {
-  # Extract coordinates directly from endpoints_sf using st_coordinates
-  p1 <- st_coordinates(endpoints_sf[gap_indices[i, 1], ])
-  p2 <- st_coordinates(endpoints_sf[gap_indices[i, 2], ])
-  
-  # Create a new LINESTRING connecting the two points
-  new_line <- st_linestring(rbind(p1, p2))
-  new_lines[[i]] <- new_line
-}
-
-# Step 6: Convert the new lines to an sf object
-new_lines_sf <- st_sfc(new_lines, crs = st_crs(network))
-
-# Step 7: Combine the original network with the new line segments
-combined_network <- rbind(network, st_as_sf(new_lines_sf))
-
-# Step 8: Visualize the updated network
 ggplot() +
-  geom_sf(data = combined_network, color = "black", size = 0.5) +   # Plot the combined network (including new lines)
-  ggtitle("Network with Closed Gaps") +
+  geom_sf(data = edin_offroad_net, color = "black", size = 2, alpha = 2) +
+  geom_sf(data = cleaned_edin, color = "red", size = 2) +
+  ggtitle("Original Network (Red) vs Cleaned Network (Black)") +
   theme_minimal()
 
+mapview(leeds_net)
 ```
