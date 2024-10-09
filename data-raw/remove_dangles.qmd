@@ -285,7 +285,7 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
   library(sf)
   library(igraph)
   library(dplyr)
-  library(tidyr)  # For the 'separate' function
+  library(tidyr)  
   
   # Step 1: Transform to Projected CRS
   projected_crs <- st_crs(crs_proj)
@@ -296,7 +296,7 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
   network_noded <- st_line_merge(network_noded)
   network_noded_sf <- st_cast(network_noded, "LINESTRING")
   
-  # Step 3: Snap the Network to Itself (Optional, can be skipped if not needed)
+  # Step 3: Snap the Network to Itself 
   threshold <- units::set_units(tolerance, "m")
   network_snapped <- st_snap(network_noded_sf, st_union(network_noded_sf), tolerance = threshold)
   
