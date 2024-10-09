@@ -69,6 +69,15 @@ if (!require("remotes")) {
 remotes::install_github("nptscot/corenet")
 ```
 
+To install `corenet`, you may need to add an additional repository to access the `rsgeo` package:
+
+```{r}
+options(repos = c(
+  josiahparry = 'https://josiahparry.r-universe.dev',
+  CRAN = 'https://cloud.r-project.org'
+))
+install.packages('corenet')
+```
 Load the package with the following for local development:
 
 ```{r, include=FALSE}
@@ -600,3 +609,4 @@ cycle_network = function(area, NPT_network, length_threshold = 1) {
     return(summarized_data)
 }
 ```
+
