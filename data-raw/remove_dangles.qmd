@@ -122,21 +122,21 @@ RD_leeds_1 = removeDangles_1(leeds_net, tolerance = 0.001)
 RD_leeds_2 = removeDangles_1(leeds_net, tolerance = 10)
 
 # Plot for network 1
-p1 <- ggplot() +
+p1 = ggplot() +
   geom_sf(data = leeds_net, color = "gray", size = 1) +
   geom_sf(data = RD_leeds_1, color = "blue", size = 1) +
   ggtitle("Network 1") +
   theme_minimal()
 
 # Plot for network 2
-p2 <- ggplot() +
+p2 = ggplot() +
   geom_sf(data = leeds_net, color = "gray", size = 1) +
   geom_sf(data = RD_leeds_2, color = "red", size = 1) +
   ggtitle("Network 2") +
   theme_minimal()
 
 # Combine both plots side by side using patchwork
-combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+combined_plot = p1 + p2 + plot_layout(ncol = 2)
 
 # Display the plot
 print(combined_plot)
@@ -148,21 +148,21 @@ print(combined_plot)
 # RD2_leeds = removeDangles_2(leeds_net, percentile = 0.012)
 
 # # Plot for network 1
-# p1 <- ggplot() +
+# p1 = ggplot() +
 #   geom_sf(data = leeds_net, color = "gray", size = 2) +
 #   geom_sf(data = RD1_leeds, color = "blue", size = 1) +
 #   ggtitle("Network 1") +
 #   theme_minimal()
 
 # # Plot for network 2
-# p2 <- ggplot() +
+# p2 = ggplot() +
 #   geom_sf(data = leeds_net, color = "gray", size = 2) +
 #   geom_sf(data = RD2_leeds, color = "red", size = 1) +
 #   ggtitle("Network 2") +
 #   theme_minimal()
 
 # # Combine both plots side by side using patchwork
-# combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+# combined_plot = p1 + p2 + plot_layout(ncol = 2)
 
 # # Display the plot
 # print(combined_plot)
@@ -176,21 +176,21 @@ RD_edin_1 = removeDangles_1(edin_offroad_net, tolerance = 0.012)
 RD_edin_2 = removeDangles_1(edin_offroad_net, tolerance = 10)
 
 # Plot for network 1
-p1 <- ggplot() +
+p1 = ggplot() +
   geom_sf(data = edin_offroad_net, color = "gray", size = 1) +
   geom_sf(data = RD_edin_1, color = "blue", size = 1) +
   ggtitle("Network using removeDangles_1_0.012") +
   theme_minimal()
 
 # Plot for network 2
-p2 <- ggplot() +
+p2 = ggplot() +
   geom_sf(data = edin_offroad_net, color = "gray", size = 1) +
   geom_sf(data = RD_edin_2, color = "red", size = 1) +
   ggtitle("using removeDangles_1_10") +
   theme_minimal()
 
 # Combine both plots side by side using patchwork
-combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+combined_plot = p1 + p2 + plot_layout(ncol = 2)
 
 # Display the plot
 print(combined_plot)
@@ -205,21 +205,21 @@ RD1_edin = removeDangles_1(edin_offroad_net, tolerance = 0.001)
 RD2_edin = removeDangles_2(edin_offroad_net, percentile = 0.012)
 
 # Plot for network 1
-p1 <- ggplot() +
+p1 = ggplot() +
   geom_sf(data = edin_offroad_net, color = "gray", size = 2) +
   geom_sf(data = RD1_edin, color = "blue", size = 1) +
   ggtitle("Network using removeDangles_1") +
   theme_minimal()
 
 # Plot for network 2
-p2 <- ggplot() +
+p2 = ggplot() +
   geom_sf(data = edin_offroad_net, color = "gray", size = 2) +
   geom_sf(data = RD2_edin, color = "red", size = 1) +
   ggtitle("Network using removeDangles_2") +
   theme_minimal()
 
 # Combine both plots side by side using patchwork
-combined_plot <- p1 + p2 + plot_layout(ncol = 2)
+combined_plot = p1 + p2 + plot_layout(ncol = 2)
 
 # Display the plot
 print(combined_plot)
@@ -237,10 +237,10 @@ library(ggplot2)
 library(tidyr)  # Load tidyr for the separate function
 
 # Extract edges (line segments)
-edges <- st_cast(leeds_net, "LINESTRING")
+edges = st_cast(leeds_net, "LINESTRING")
 
 # Extract start and end coordinates of each line segment
-edge_list <- st_coordinates(edges) %>%
+edge_list = st_coordinates(edges) %>%
   as.data.frame() %>%
   group_by(L1) %>%
   summarize(
@@ -250,29 +250,29 @@ edge_list <- st_coordinates(edges) %>%
     y_end = last(Y)
   )
 # Create node identifiers by concatenating coordinates
-edges_df <- edge_list %>%
+edges_df = edge_list %>%
   mutate(
     from = paste(x_start, y_start, sep = ","),
     to = paste(x_end, y_end, sep = ",")
   ) %>%
   select(from, to)
 # Create an undirected graph
-g <- graph_from_data_frame(edges_df, directed = FALSE)
+g = graph_from_data_frame(edges_df, directed = FALSE)
 # Calculate the degree of each node
-node_degree <- degree(g)
+node_degree = degree(g)
 
 # Convert node_degree to a data frame
-node_degree_df <- data.frame(
+node_degree_df = data.frame(
   node = names(node_degree),
   degree = node_degree
 )
 
 # Split the node coordinates back into separate columns
-node_degree_df <- node_degree_df %>%
+node_degree_df = node_degree_df %>%
   separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
 
 # Convert node_degree_df back to sf object
-node_degree_sf <- st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(4326))
+node_degree_sf = st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(4326))
 
 mapview(node_degree_sf, zcol = "degree") + mapview(leeds_net)
 ```
@@ -280,31 +280,32 @@ mapview(node_degree_sf, zcol = "degree") + mapview(leeds_net)
 
 # new remove dangles function
 ```{r}
-remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative = TRUE) {
-  # Load necessary libraries
-  library(sf)
-  library(igraph)
-  library(dplyr)
-  library(tidyr)  
+# Load necessary libraries
+library(sf)
+library(igraph)
+library(dplyr)
+library(tidyr)  
+
+remove_dangles = function(network, crs_proj = 27700, tolerance = 1, iterative = TRUE) {
   
   # Step 1: Transform to Projected CRS
-  projected_crs <- st_crs(crs_proj)
-  network_proj <- st_transform(network, crs = projected_crs)
+  projected_crs = st_crs(crs_proj)
+  network_proj = st_transform(network, crs = projected_crs)
   
   # Step 2: Node the Network (Split Lines at Intersections)
-  network_noded <- st_union(network_proj)
-  network_noded <- st_line_merge(network_noded)
-  network_noded_sf <- st_cast(network_noded, "LINESTRING")
+  network_noded = st_union(network_proj)
+  network_noded = st_line_merge(network_noded)
+  network_noded_sf = st_cast(network_noded, "LINESTRING")
   
   # Step 3: Snap the Network to Itself 
-  threshold <- units::set_units(tolerance, "m")
-  network_snapped <- st_snap(network_noded_sf, st_union(network_noded_sf), tolerance = threshold)
+  threshold = units::set_units(tolerance, "m")
+  network_snapped = st_snap(network_noded_sf, st_union(network_noded_sf), tolerance = threshold)
   
   # Step 4: Extract Edges (Line Segments)
-  edges <- st_cast(network_snapped, "LINESTRING")
+  edges = st_cast(network_snapped, "LINESTRING")
   
   # Step 5: Create Edge List with Start and End Coordinates
-  edge_list <- st_coordinates(edges) %>%
+  edge_list = st_coordinates(edges) %>%
     as.data.frame() %>%
     group_by(L1) %>%
     summarize(
@@ -315,7 +316,7 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
     )
   
   # Step 6: Create Node Identifiers
-  edges_df <- edge_list %>%
+  edges_df = edge_list %>%
     mutate(
       from = paste(x_start, y_start, sep = ","),
       to = paste(x_end, y_end, sep = ",")
@@ -323,14 +324,14 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
     select(from, to)
   
   # Step 7: Create Graph
-  g <- graph_from_data_frame(edges_df, directed = FALSE)
+  g = graph_from_data_frame(edges_df, directed = FALSE)
   
   # Step 8: Remove Dangles (Iteratively or Once)
   if (iterative) {
     # Iterative Removal of Dangles
     repeat {
       # Calculate Node Degrees
-      node_degree <- degree(g)
+      node_degree = degree(g)
       
       # Break the loop if no nodes with degree 1 are left
       if (all(node_degree > 1)) {
@@ -338,20 +339,20 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
       }
       
       # Identify Nodes with Degree 1
-      node_degree_df <- data.frame(
+      node_degree_df = data.frame(
         node = names(node_degree),
         degree = node_degree
       ) %>%
         separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
       
       # Identify Dangle Nodes
-      dangle_nodes <- node_degree_df %>% filter(degree == 1)
+      dangle_nodes = node_degree_df %>% filter(degree == 1)
       
       # Create Node Info for Joining
-      node_info <- node_degree_df
+      node_info = node_degree_df
       
       # Merge Edge List with Node Degrees to Identify Edges Connected to Dangle Nodes
-      edges_with_nodes <- edge_list %>%
+      edges_with_nodes = edge_list %>%
         mutate(
           from = paste(x_start, y_start, sep = ","),
           to = paste(x_end, y_end, sep = ",")
@@ -370,7 +371,7 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
         rename(degree_to = degree)
       
       # Identify Edges Connected to Dangle Nodes
-      dangle_edges_indices <- edges_with_nodes %>%
+      dangle_edges_indices = edges_with_nodes %>%
         filter(degree_from == 1 | degree_to == 1) %>%
         pull(L1)
       
@@ -380,10 +381,10 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
       }
       
       # Remove Dangle Edges
-      edges <- edges[-dangle_edges_indices, ]
+      edges = edges[-dangle_edges_indices, ]
       
       # Reconstruct Edge List and Graph for Next Iteration
-      edge_list <- st_coordinates(edges) %>%
+      edge_list = st_coordinates(edges) %>%
         as.data.frame() %>%
         group_by(L1) %>%
         summarize(
@@ -393,32 +394,32 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
           y_end = last(Y)
         )
       
-      edges_df <- edge_list %>%
+      edges_df = edge_list %>%
         mutate(
           from = paste(x_start, y_start, sep = ","),
           to = paste(x_end, y_end, sep = ",")
         ) %>%
         select(from, to)
       
-      g <- graph_from_data_frame(edges_df, directed = FALSE)
+      g = graph_from_data_frame(edges_df, directed = FALSE)
     }
   } else {
     # Single Removal of Dangles
     # Calculate Node Degrees
-    node_degree <- degree(g)
+    node_degree = degree(g)
     
     # Identify Nodes with Degree 1
-    node_degree_df <- data.frame(
+    node_degree_df = data.frame(
       node = names(node_degree),
       degree = node_degree
     ) %>%
       separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
     
     # Create Node Info for Joining
-    node_info <- node_degree_df
+    node_info = node_degree_df
     
     # Merge Edge List with Node Degrees to Identify Edges Connected to Dangle Nodes
-    edges_with_nodes <- edge_list %>%
+    edges_with_nodes = edge_list %>%
       mutate(
         from = paste(x_start, y_start, sep = ","),
         to = paste(x_end, y_end, sep = ",")
@@ -437,17 +438,17 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
       rename(degree_to = degree)
     
     # Identify Edges Connected to Dangle Nodes
-    dangle_edges_indices <- edges_with_nodes %>%
+    dangle_edges_indices = edges_with_nodes %>%
       filter(degree_from == 1 | degree_to == 1) %>%
       pull(L1)
     
     # Remove Dangle Edges
-    edges <- edges[-dangle_edges_indices, ]
+    edges = edges[-dangle_edges_indices, ]
   }
   
   # Step 9: Return the Cleaned Network
   # Transform Back to Original CRS
-  cleaned_network <- st_transform(edges, st_crs(network))
+  cleaned_network = st_transform(edges, st_crs(network))
   
   return(cleaned_network)
 }
@@ -457,20 +458,20 @@ remove_dangles <- function(network, crs_proj = 27700, tolerance = 1, iterative =
 # apply to leeds network and edinburgh offroad network
 
 ```{r}
-cleaned_leeds <- remove_dangles(leeds_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
+cleaned_leeds = remove_dangles(leeds_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
 
-cleaned_edin <- remove_dangles(edin_offroad_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
+cleaned_edin = remove_dangles(edin_offroad_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
 
 ggplot() +
   geom_sf(data = leeds_net, color = "black", size = 2, alpha = 2) +
   geom_sf(data = cleaned_leeds, color = "red", size = 2) +
-  ggtitle("Original Network (Red) vs Cleaned Network (Black)") +
+  ggtitle("Original Network (Black) vs Cleaned Network (Red)") +
   theme_minimal()
 
 ggplot() +
   geom_sf(data = edin_offroad_net, color = "black", size = 2, alpha = 2) +
   geom_sf(data = cleaned_edin, color = "red", size = 2) +
-  ggtitle("Original Network (Red) vs Cleaned Network (Black)") +
+  ggtitle("Original Network (Black) vs Cleaned Network (Red)") +
   theme_minimal()
 
 mapview(leeds_net)
