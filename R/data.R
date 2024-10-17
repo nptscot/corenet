@@ -53,6 +53,33 @@
 #' data(NPT_demo_6km)
 #' head(NPT_demo_6km)
 "NPT_demo_6km"
+NULL
 
+#' Central Leeds OSM Network
+#' 
+#' See the `data-raw` folder for the code used to generate this data set.
+#' 
+#' @docType data
+#' @keywords datasets
+#' @name central_leeds_osm
+#' @format An object of class \code{sf} (inherits from \code{data.frame}).
+#' @examples
+#' head(central_leeds_osm)
+#' library(sf) # for plotting
+#' plot(central_leeds_osm$geometry)
+NULL
 
+#' Edinburgh off road network
+#'  
+#' This data set contains network data for Edinburgh's off-road network.
+#' 
+#' @docType data
+#' @keywords datasets
+#' @name edinburgh_offroad
+#' @format An object of class \code{sf} (inherits from \code{data.frame}).
+#' @examples
+#' data(edinburgh_offroad)
+#' head(edinburgh_offroad)
+#' library(sf) # for plotting
+#' plot(edinburgh_offroad$geometry)
 NULL
