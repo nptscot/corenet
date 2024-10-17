@@ -237,7 +237,7 @@ library(ggplot2)
 library(tidyr)  # Load tidyr for the separate function
 
 # Extract edges (line segments)
-edges = st_cast(leeds_net, "LINESTRING")
+edges = st_cast(edin_offroad_net, "LINESTRING")
 
 # Extract start and end coordinates of each line segment
 edge_list = st_coordinates(edges) %>%
@@ -272,66 +272,60 @@ node_degree_df = node_degree_df %>%
   separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
 
 # Convert node_degree_df back to sf object
-node_degree_sf = st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(4326))
+node_degree_sf = st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(27700))
 
-mapview(node_degree_sf, zcol = "degree") + mapview(leeds_net)
+mapview(node_degree_sf, zcol = "degree") + mapview(edin_offroad_net)
 ```
 
 
 # new remove dangles function
 ```{r}
-# Load necessary libraries
-library(sf)
-library(igraph)
-library(dplyr)
-library(tidyr)  
-
 remove_dangles = function(network, crs_proj = 27700, tolerance = 1, iterative = TRUE) {
-  
+
   # Step 1: Transform to Projected CRS
-  projected_crs = st_crs(crs_proj)
-  network_proj = st_transform(network, crs = projected_crs)
+  projected_crs = sf::st_crs(crs_proj)
+  network_proj = sf::st_transform(network, crs = projected_crs)
   
   # Step 2: Node the Network (Split Lines at Intersections)
-  network_noded = st_union(network_proj)
-  network_noded = st_line_merge(network_noded)
-  network_noded_sf = st_cast(network_noded, "LINESTRING")
+  network_noded = sf::st_union(network_proj)
+  network_noded = sf::st_line_merge(network_noded)
+  network_noded_sf = sf::st_cast(network_noded, "LINESTRING")
   
   # Step 3: Snap the Network to Itself 
   threshold = units::set_units(tolerance, "m")
-  network_snapped = st_snap(network_noded_sf, st_union(network_noded_sf), tolerance = threshold)
+  network_snapped = sf::st_snap(network_noded_sf, sf::st_union(network_noded_sf), tolerance = threshold)
   
   # Step 4: Extract Edges (Line Segments)
-  edges = st_cast(network_snapped, "LINESTRING")
+  edges = sf::st_cast(network_snapped, "LINESTRING")
   
   # Step 5: Create Edge List with Start and End Coordinates
-  edge_list = st_coordinates(edges) %>%
-    as.data.frame() %>%
-    group_by(L1) %>%
-    summarize(
-      x_start = first(X),
-      y_start = first(Y),
-      x_end = last(X),
-      y_end = last(Y)
+  edge_list = sf::st_coordinates(edges) |>
+    as.data.frame() |>
+    dplyr::group_by(L1) |>
+    dplyr::summarize(
+      x_start = dplyr::first(X),
+      y_start = dplyr::first(Y),
+      x_end = dplyr::last(X),
+      y_end = dplyr::last(Y)
     )
   
   # Step 6: Create Node Identifiers
-  edges_df = edge_list %>%
-    mutate(
+  edges_df = edge_list |>
+    dplyr::mutate(
       from = paste(x_start, y_start, sep = ","),
       to = paste(x_end, y_end, sep = ",")
-    ) %>%
-    select(from, to)
+    ) |>
+    dplyr::select(from, to)
   
   # Step 7: Create Graph
-  g = graph_from_data_frame(edges_df, directed = FALSE)
+  g = igraph::graph_from_data_frame(edges_df, directed = FALSE)
   
   # Step 8: Remove Dangles (Iteratively or Once)
   if (iterative) {
     # Iterative Removal of Dangles
     repeat {
       # Calculate Node Degrees
-      node_degree = degree(g)
+      node_degree = igraph::degree(g)
       
       # Break the loop if no nodes with degree 1 are left
       if (all(node_degree > 1)) {
@@ -342,38 +336,38 @@ remove_dangles = function(network, crs_proj = 27700, tolerance = 1, iterative = 
       node_degree_df = data.frame(
         node = names(node_degree),
         degree = node_degree
-      ) %>%
-        separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
+      ) |>
+        tidyr::separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
       
       # Identify Dangle Nodes
-      dangle_nodes = node_degree_df %>% filter(degree == 1)
+      dangle_nodes = node_degree_df |> dplyr::filter(degree == 1)
       
       # Create Node Info for Joining
       node_info = node_degree_df
       
       # Merge Edge List with Node Degrees to Identify Edges Connected to Dangle Nodes
-      edges_with_nodes = edge_list %>%
-        mutate(
+      edges_with_nodes = edge_list |>
+        dplyr::mutate(
           from = paste(x_start, y_start, sep = ","),
           to = paste(x_end, y_end, sep = ",")
-        ) %>%
-        left_join(
-          node_info %>%
-            mutate(node = paste(X, Y, sep = ",")),
+        ) |>
+        dplyr::left_join(
+          node_info |>
+            dplyr::mutate(node = paste(X, Y, sep = ",")),
           by = c("from" = "node")
-        ) %>%
-        rename(degree_from = degree) %>%
-        left_join(
-          node_info %>%
-            mutate(node = paste(X, Y, sep = ",")),
+        ) |>
+        dplyr::rename(degree_from = degree) |>
+        dplyr::left_join(
+          node_info |>
+            dplyr::mutate(node = paste(X, Y, sep = ",")),
           by = c("to" = "node")
-        ) %>%
-        rename(degree_to = degree)
+        ) |>
+        dplyr::rename(degree_to = degree)
       
       # Identify Edges Connected to Dangle Nodes
-      dangle_edges_indices = edges_with_nodes %>%
-        filter(degree_from == 1 | degree_to == 1) %>%
-        pull(L1)
+      dangle_edges_indices = edges_with_nodes |>
+        dplyr::filter(degree_from == 1 | degree_to == 1) |>
+        dplyr::pull(L1)
       
       # Break if No Dangle Edges are Found
       if (length(dangle_edges_indices) == 0) {
@@ -384,72 +378,68 @@ remove_dangles = function(network, crs_proj = 27700, tolerance = 1, iterative = 
       edges = edges[-dangle_edges_indices, ]
       
       # Reconstruct Edge List and Graph for Next Iteration
-      edge_list = st_coordinates(edges) %>%
-        as.data.frame() %>%
-        group_by(L1) %>%
-        summarize(
-          x_start = first(X),
-          y_start = first(Y),
-          x_end = last(X),
-          y_end = last(Y)
+      edge_list = sf::st_coordinates(edges) |>
+        as.data.frame() |>
+        dplyr::group_by(L1) |>
+        dplyr::summarize(
+          x_start = dplyr::first(X),
+          y_start = dplyr::first(Y),
+          x_end = dplyr::last(X),
+          y_end = dplyr::last(Y)
         )
       
-      edges_df = edge_list %>%
-        mutate(
+      edges_df = edge_list |>
+        dplyr::mutate(
           from = paste(x_start, y_start, sep = ","),
           to = paste(x_end, y_end, sep = ",")
-        ) %>%
-        select(from, to)
+        ) |>
+        dplyr::select(from, to)
       
-      g = graph_from_data_frame(edges_df, directed = FALSE)
+      g = igraph::graph_from_data_frame(edges_df, directed = FALSE)
     }
   } else {
     # Single Removal of Dangles
-    # Calculate Node Degrees
-    node_degree = degree(g)
+    node_degree = igraph::degree(g)
     
-    # Identify Nodes with Degree 1
     node_degree_df = data.frame(
       node = names(node_degree),
       degree = node_degree
-    ) %>%
-      separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
-    
-    # Create Node Info for Joining
+    ) |>
+      tidyr::separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
+
+    # Convert node_degree_df back to sf object
+    node_degree_sf = sf::st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(crs_proj))
+
     node_info = node_degree_df
-    
-    # Merge Edge List with Node Degrees to Identify Edges Connected to Dangle Nodes
-    edges_with_nodes = edge_list %>%
-      mutate(
+
+    edges_with_nodes = edge_list |>
+      dplyr::mutate(
         from = paste(x_start, y_start, sep = ","),
         to = paste(x_end, y_end, sep = ",")
-      ) %>%
-      left_join(
-        node_info %>%
-          mutate(node = paste(X, Y, sep = ",")),
+      ) |>
+      dplyr::left_join(
+        node_info |>
+          dplyr::mutate(node = paste(X, Y, sep = ",")),
         by = c("from" = "node")
-      ) %>%
-      rename(degree_from = degree) %>%
-      left_join(
-        node_info %>%
-          mutate(node = paste(X, Y, sep = ",")),
+      ) |>
+      dplyr::rename(degree_from = degree) |>
+      dplyr::left_join(
+        node_info |>
+          dplyr::mutate(node = paste(X, Y, sep = ",")),
         by = c("to" = "node")
-      ) %>%
-      rename(degree_to = degree)
+      ) |>
+      dplyr::rename(degree_to = degree)
     
-    # Identify Edges Connected to Dangle Nodes
-    dangle_edges_indices = edges_with_nodes %>%
-      filter(degree_from == 1 | degree_to == 1) %>%
-      pull(L1)
-    
-    # Remove Dangle Edges
+    dangle_edges_indices = edges_with_nodes |>
+      dplyr::filter(degree_from == 1 | degree_to == 1) |>
+      dplyr::pull(L1)
+   
     edges = edges[-dangle_edges_indices, ]
   }
   
   # Step 9: Return the Cleaned Network
-  # Transform Back to Original CRS
-  cleaned_network = st_transform(edges, st_crs(network))
-  
+  cleaned_network = sf::st_transform(edges, sf::st_crs(network))
+
   return(cleaned_network)
 }
 
@@ -458,9 +448,14 @@ remove_dangles = function(network, crs_proj = 27700, tolerance = 1, iterative = 
 # apply to leeds network and edinburgh offroad network
 
 ```{r}
-cleaned_leeds = remove_dangles(leeds_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
+cleaned_leeds = remove_dangles(leeds_net, crs_proj = 27700, tolerance = 1, iterative = FALSE) |> st_transform(27700)
+leeds_net = leeds_net |> st_transform(27700)
 
 cleaned_edin = remove_dangles(edin_offroad_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
+
+mapview(cleaned_leeds, color = "red") + mapview(leeds_net, color = "blue")
+
+mapview(cleaned_edin, color = "red") + mapview(edin_offroad_net, color = "blue")
 
 ggplot() +
   geom_sf(data = leeds_net, color = "black", size = 2, alpha = 2) +
