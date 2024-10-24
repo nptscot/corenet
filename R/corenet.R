@@ -668,6 +668,13 @@ create_coherent_network_PMtiles = function(folder_path, city_filename, cohesive_
 #' 
 
 
+library(ggplot2)
+library(sf)
+library(ggspatial)
+library(dplyr)
+library(patchwork)
+library(viridis)  # Assuming viridis is used for color scales
+
 plot_networks = function(networks, colors, titles, output_file, ncol = 2, width = 12, height = 6, base_map = TRUE, line_width = 1, point_size = 1) {
   
   plots = list()  # Create a list to hold individual plots
@@ -708,11 +715,14 @@ plot_networks = function(networks, colors, titles, output_file, ncol = 2, width 
       }
     }
     
+    # Apply axis formatting for rounded coordinates
     network_plot = network_plot +
       ggtitle(titles[[i]]) +
       theme_minimal() +
       theme(panel.background = element_rect(fill = "gainsboro"), legend.position = "right") +
-      scale_color_viridis(discrete = TRUE)  # Apply discrete color scale
+      scale_color_viridis(discrete = TRUE) +  # Apply discrete color scale
+      scale_x_continuous(labels = function(x) format(round(x, 2), nsmall = 2)) +
+      scale_y_continuous(labels = function(y) format(round(y, 2), nsmall = 2))
 
     plots[[i]] = network_plot
   }
@@ -721,4 +731,56 @@ plot_networks = function(networks, colors, titles, output_file, ncol = 2, width 
   ggsave(output_file, combined_plot, width = width, height = height)
   
   return(combined_plot)
+}
+
+
+#' Calculate the degree of each node in a network
+#' 
+#' This function calculates the degree of each node in a network.
+#' @param network_sf An sf object representing the network.
+#' @param crs_proj The CRS code for the projection.
+#' @return An sf object with the node degree.
+#' @export
+#' 
+
+cal_node_degree <- function(network_sf, crs_proj = 27700) {
+  edges = st_cast(network_sf, "LINESTRING") |> st_transform(crs_proj)
+
+  # Extract start and end coordinates of each line segment
+  edge_list = st_coordinates(edges) %>%
+    as.data.frame() %>%
+    group_by(L1) %>%
+    summarize(
+      x_start = first(X),
+      y_start = first(Y),
+      x_end = last(X),
+      y_end = last(Y)
+    )
+  # Create node identifiers by concatenating coordinates
+  edges_df = edge_list %>%
+    mutate(
+      from = paste(x_start, y_start, sep = ","),
+      to = paste(x_end, y_end, sep = ",")
+    ) %>%
+    select(from, to)
+  # Create an undirected graph
+  g = graph_from_data_frame(edges_df, directed = FALSE)
+
+  node_degree = degree(g)
+
+  # Convert node_degree to a data frame
+  node_degree_df = data.frame(
+    node = names(node_degree),
+    degree = node_degree
+  )
+
+  # Split the node coordinates back into separate columns
+  node_degree_df = node_degree_df %>%
+    separate(node, into = c("X", "Y"), sep = ",", convert = TRUE)
+
+  # Convert node_degree_df back to sf object
+  node_degree_sf = st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(crs_proj))
+
+  return(node_degree_sf)
+
 }
