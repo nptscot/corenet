@@ -653,3 +653,72 @@ create_coherent_network_PMtiles = function(folder_path, city_filename, cohesive_
   return(system_output)
 }
 
+
+#' Create a plot of the network
+#' 
+#' This function creates a plot of the network using ggplot2 and ggspatial.
+#' @param network An sf object representing the network.
+#' @param color The color to use for the network.
+#' @param title The title for the plot.
+#' @param output_file The filename for the output plot.
+#' @param base_map A logical value indicating whether to include a base map.
+#' @param line_width The width of the lines in the plot.
+#' @return The plot object.
+#' @export
+#' 
+
+
+plot_networks = function(networks, colors, titles, output_file, ncol = 2, width = 12, height = 6, base_map = TRUE, line_width = 1, point_size = 1) {
+  
+  plots = list()  # Create a list to hold individual plots
+
+  for (i in seq_along(networks)) {
+    network_plot = ggplot()  # Initialize ggplot
+
+    if (base_map) {
+      network_plot = network_plot + annotation_map_tile(type = "osm")  # Add OSM base map if enabled
+    }
+
+    # Loop through each network data set
+    if (is.list(networks[[i]]) && length(networks[[i]]) == 2) {
+      for (j in 1:2) {
+        data = networks[[i]][[j]]
+        geom_type = sf::st_geometry_type(data)[1]
+        size_use = if (geom_type %in% c("POINT", "MULTIPOINT")) point_size else line_width
+        
+        if (is.character(colors[[i]][j]) && any(colors[[i]][j] %in% names(data))) {
+          network_plot = network_plot +
+            geom_sf(data = data, aes(color = factor(.data[[colors[[i]][j]]])), size = size_use)
+        } else {
+          network_plot = network_plot +
+            geom_sf(data = data, color = colors[[i]][j], size = size_use)
+        }
+      }
+    } else {
+      data = networks[[i]]
+      geom_type = sf::st_geometry_type(data)[1]
+      size_use = if (geom_type %in% c("POINT", "MULTIPOINT")) point_size else line_width
+
+      if (is.character(colors[[i]]) && any(colors[[i]] %in% names(data))) {
+        network_plot = network_plot +
+          geom_sf(data = data, aes(color = factor(.data[[colors[[i]]]])), size = size_use)
+      } else {
+        network_plot = network_plot +
+          geom_sf(data = data, color = colors[[i]], size = size_use)
+      }
+    }
+    
+    network_plot = network_plot +
+      ggtitle(titles[[i]]) +
+      theme_minimal() +
+      theme(panel.background = element_rect(fill = "gainsboro"), legend.position = "right") +
+      scale_color_viridis(discrete = TRUE)  # Apply discrete color scale
+
+    plots[[i]] = network_plot
+  }
+
+  combined_plot = patchwork::wrap_plots(plots, ncol = ncol)
+  ggsave(output_file, combined_plot, width = width, height = height)
+  
+  return(combined_plot)
+}

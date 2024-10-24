@@ -237,8 +237,9 @@ library(ggplot2)
 library(tidyr)  # Load tidyr for the separate function
 
 # Extract edges (line segments)
-edges = st_cast(edin_offroad_net, "LINESTRING")
-
+edges = st_cast(leeds_net, "LINESTRING")
+fix_edges = st_snap(edges |> st_transform(27700), st_union(edges) |> st_transform(27700), tolerance = 0.1)
+edges = fix_edges
 # Extract start and end coordinates of each line segment
 edge_list = st_coordinates(edges) %>%
   as.data.frame() %>%
@@ -258,7 +259,7 @@ edges_df = edge_list %>%
   select(from, to)
 # Create an undirected graph
 g = graph_from_data_frame(edges_df, directed = FALSE)
-# Calculate the degree of each node
+
 node_degree = degree(g)
 
 # Convert node_degree to a data frame
@@ -274,7 +275,79 @@ node_degree_df = node_degree_df %>%
 # Convert node_degree_df back to sf object
 node_degree_sf = st_as_sf(node_degree_df, coords = c("X", "Y"), crs = st_crs(27700))
 
-mapview(node_degree_sf, zcol = "degree") + mapview(edin_offroad_net)
+mapview(node_degree_sf |> st_transform(4326), zcol = "degree") + mapview(leeds_net)
+
+
+plot_networks = function(networks, colors, titles, output_file, ncol = 2, width = 12, height = 6, base_map = TRUE, line_width = 1, point_size = 1) {
+  
+  plots = list()  # Create a list to hold individual plots
+
+  for (i in seq_along(networks)) {
+    network_plot = ggplot()  # Initialize ggplot
+
+    if (base_map) {
+      network_plot = network_plot + annotation_map_tile(type = "osm")  # Add OSM base map if enabled
+    }
+
+    # Loop through each network data set
+    if (is.list(networks[[i]]) && length(networks[[i]]) == 2) {
+      for (j in 1:2) {
+        data = networks[[i]][[j]]
+        geom_type = sf::st_geometry_type(data)[1]
+        size_use = if (geom_type %in% c("POINT", "MULTIPOINT")) point_size else line_width
+        
+        if (is.character(colors[[i]][j]) && any(colors[[i]][j] %in% names(data))) {
+          network_plot = network_plot +
+            geom_sf(data = data, aes(color = factor(.data[[colors[[i]][j]]])), size = size_use)
+        } else {
+          network_plot = network_plot +
+            geom_sf(data = data, color = colors[[i]][j], size = size_use)
+        }
+      }
+    } else {
+      data = networks[[i]]
+      geom_type = sf::st_geometry_type(data)[1]
+      size_use = if (geom_type %in% c("POINT", "MULTIPOINT")) point_size else line_width
+
+      if (is.character(colors[[i]]) && any(colors[[i]] %in% names(data))) {
+        network_plot = network_plot +
+          geom_sf(data = data, aes(color = factor(.data[[colors[[i]]]])), size = size_use)
+      } else {
+        network_plot = network_plot +
+          geom_sf(data = data, color = colors[[i]], size = size_use)
+      }
+    }
+    
+    network_plot = network_plot +
+      ggtitle(titles[[i]]) +
+      theme_minimal() +
+      theme(panel.background = element_rect(fill = "gainsboro"), legend.position = "right") +
+      scale_color_viridis(discrete = TRUE)  # Apply discrete color scale
+
+    plots[[i]] = network_plot
+  }
+
+  combined_plot = patchwork::wrap_plots(plots, ncol = ncol)
+  ggsave(output_file, combined_plot, width = width, height = height)
+  
+  return(combined_plot)
+}
+
+# Example usage
+# Assuming leeds_net and node_degree_sf are properly defined sf objects
+networks = list(
+  list(leeds_net, node_degree_sf)
+)
+colors = list(
+  c("blue", "degree")
+)
+titles = list(
+  "Network Visualization"
+)
+
+# Call the function
+plot_networks(networks, colors, titles, "networks_plot.png", ncol = 1, base_map = FALSE, line_width = 2, point_size = 5)
+
 ```
 
 
@@ -439,7 +512,7 @@ remove_dangles = function(network, crs_proj = 27700, tolerance = 1, iterative = 
   
   # Step 9: Return the Cleaned Network
   cleaned_network = sf::st_transform(edges, sf::st_crs(network))
-
+  cleaned_network = sf::st_sf(cleaned_network)
   return(cleaned_network)
 }
 
@@ -451,23 +524,750 @@ remove_dangles = function(network, crs_proj = 27700, tolerance = 1, iterative = 
 cleaned_leeds = remove_dangles(leeds_net, crs_proj = 27700, tolerance = 1, iterative = FALSE) |> st_transform(27700)
 leeds_net = leeds_net |> st_transform(27700)
 
-cleaned_edin = remove_dangles(edin_offroad_net, crs_proj = 27700, tolerance = 1, iterative = FALSE)
+cleaned_edin = remove_dangles(edin_offroad_net, crs_proj = 27700, tolerance = 1,iterative = FALSE)
+names(cleaned_edin)
 
 mapview(cleaned_leeds, color = "red") + mapview(leeds_net, color = "blue")
 
 mapview(cleaned_edin, color = "red") + mapview(edin_offroad_net, color = "blue")
-
-ggplot() +
-  geom_sf(data = leeds_net, color = "black", size = 2, alpha = 2) +
-  geom_sf(data = cleaned_leeds, color = "red", size = 2) +
-  ggtitle("Original Network (Black) vs Cleaned Network (Red)") +
-  theme_minimal()
-
-ggplot() +
-  geom_sf(data = edin_offroad_net, color = "black", size = 2, alpha = 2) +
-  geom_sf(data = cleaned_edin, color = "red", size = 2) +
-  ggtitle("Original Network (Black) vs Cleaned Network (Red)") +
-  theme_minimal()
-
-mapview(leeds_net)
 ```
+```{r}
+remove_dangles_with_angle = function(network, crs_proj = 27700, tolerance = 1,
+                                      angle_threshold_low = 10, angle_threshold_high = 170,
+                                      return_debug_data = FALSE) {
+  # Load required packages
+  library(sf)
+  library(dplyr)
+  library(tidyr)
+  library(igraph)
+  library(units)
+  
+  # Step 1: Transform to Projected CRS
+  projected_crs = st_crs(crs_proj)
+  network_proj = st_transform(network, crs = projected_crs)
+  
+  # Step 2: Node the Network (Split Lines at Intersections)
+  network_noded = st_union(network_proj)
+  network_noded_sf = st_line_merge(network_noded)
+  network_noded_sf = st_cast(network_noded_sf, "LINESTRING")
+  
+  # Step 3: Snap the Network to Itself
+  threshold = set_units(tolerance, "m")
+  network_snapped = st_snap(network_noded_sf, st_union(network_noded_sf), tolerance = threshold)
+  
+  # Step 4: Extract Edges (Line Segments)
+  edges = st_cast(network_snapped, "LINESTRING")
+  
+  # Ensure 'edges' is an sf object with an ID column
+  edges = st_sf(geometry = edges)
+  edges$edge_id = seq_len(nrow(edges))
+  
+  # Step 5: Create Edge List with Start and End Coordinates
+  edge_coords = st_coordinates(edges)
+  edges_coords_df = as.data.frame(edge_coords)
+  edges_coords_df$edge_id = edges$edge_id[edges_coords_df$L1]
+  
+  # Group by edge and get start and end points
+  edges_with_nodes = edges_coords_df %>%
+    group_by(edge_id) %>%
+    summarize(
+      x_start = first(X),
+      y_start = first(Y),
+      x_end = last(X),
+      y_end = last(Y)
+    ) %>%
+    ungroup()
+  
+  # Step 6: Create Node Identifiers
+  edges_with_nodes = edges_with_nodes %>%
+    mutate(
+      from = paste(x_start, y_start, sep = ","),
+      to = paste(x_end, y_end, sep = ",")
+    )
+  
+  edges_df = edges_with_nodes %>%
+    select(edge_id, from, to)
+  
+  # Step 7: Create Graph
+  g = graph_from_data_frame(edges_df %>% select(from, to), directed = FALSE)
+  
+  # Step 8: Calculate Node Degrees
+  node_degree = degree(g)
+  
+  # Create Node Data Frame
+  nodes_df = data.frame(
+    node = names(node_degree),
+    degree = node_degree
+  ) %>%
+    separate(node, into = c("X", "Y"), sep = ",", convert = TRUE, remove = FALSE) %>%
+    mutate(node_id = row_number())
+  
+  # Map Edges to Node IDs and Degrees
+  edges_with_nodes = edges_with_nodes %>%
+    left_join(
+      nodes_df %>% select(node, node_id, degree) %>% rename(degree_from = degree),
+      by = c("from" = "node")
+    ) %>%
+    rename(from_node_id = node_id) %>%
+    left_join(
+      nodes_df %>% select(node, node_id, degree) %>% rename(degree_to = degree),
+      by = c("to" = "node")
+    ) %>%
+    rename(to_node_id = node_id)
+  
+  # Step 9: Identify Candidate Edges Based on Degree
+  candidate_edges = edges_with_nodes %>%
+    filter(
+      degree_from >= 3 & degree_to == 1
+    )
+  
+  # Initialize columns in candidate_edges
+  candidate_edges$min_angle_deg = NA_real_
+  candidate_edges$is_dangle = FALSE
+  
+  # Include the corrected calculate_angle_at_node function here
+  # (Provided above)
+  
+  # Initialize vector to store dangle edge IDs
+  dangle_edge_ids = c()
+  
+  # Loop over candidate edges
+  for (i in seq_len(nrow(candidate_edges))) {
+    edge = candidate_edges[i, ]
+    candidate_edge_id = edge$edge_id
+    
+    # The branch node is the from_node (degree >= 3)
+    branch_node_id = edge$from_node_id
+    
+    # Get edges connected to the branch node, excluding the candidate edge
+    connected_edges = edges_with_nodes %>%
+      filter(
+        (from_node_id == branch_node_id | to_node_id == branch_node_id) &
+          edge_id != candidate_edge_id
+      )
+    
+    # Initialize min_angle_deg for this candidate edge
+    min_angle = NA_real_
+    
+    # Initialize flag to determine if edge is continuous
+    is_continuous = FALSE
+    
+    # Calculate angle between candidate edge and each connected edge
+    for (j in seq_len(nrow(connected_edges))) {
+      other_edge_id = connected_edges$edge_id[j]
+      angle_deg = calculate_angle_at_node(candidate_edge_id, other_edge_id,
+                                           branch_node_id, edges_with_nodes, nodes_df)
+      
+      # Update min_angle
+      if (!is.na(angle_deg)) {
+        if (is.na(min_angle) || angle_deg < min_angle) {
+          min_angle = angle_deg
+        }
+      }
+      
+      # Check if angle indicates a continuous line
+      if (!is.na(angle_deg) && (angle_deg <= angle_threshold_low ||
+                                angle_deg >= angle_threshold_high)) {
+        # Edge is part of a continuous line; do not mark as dangle
+        is_continuous = TRUE
+        break  # No need to check other edges
+      }
+    }
+    
+    # Store min_angle in candidate_edges
+    candidate_edges$min_angle_deg[i] = min_angle
+    
+    # Determine if edge is a dangle
+    if (!is_continuous) {
+      # Edge is a dangle
+      dangle_edge_ids = c(dangle_edge_ids, candidate_edge_id)
+      candidate_edges$is_dangle[i] = TRUE
+    }
+  }
+  
+  # Merge min_angle_deg and is_dangle back into edges_with_nodes
+  edges_with_nodes = edges_with_nodes %>%
+    left_join(
+      candidate_edges %>% select(edge_id, min_angle_deg, is_dangle),
+      by = "edge_id"
+    )
+  
+  # Step 10: Remove Dangle Edges
+  cleaned_edges = edges %>%
+    filter(!(edge_id %in% dangle_edge_ids))
+  
+  # Ensure cleaned_edges retains data attributes
+  cleaned_edges$edge_id = cleaned_edges$edge_id
+  
+  # Step 11: Return the Cleaned Network
+  cleaned_network = st_transform(cleaned_edges, st_crs(network))
+  
+  # Ensure cleaned_network is an sf object with data
+  cleaned_network = st_sf(cleaned_network)
+  
+  if (return_debug_data) {
+    return(list(
+      cleaned_network = cleaned_network,
+      edges_with_nodes = edges_with_nodes,
+      nodes_df = nodes_df,
+      candidate_edges = candidate_edges
+    ))
+  } else {
+    return(cleaned_network)
+  }
+}
+
+calculate_angle_at_node = function(edge1_id, edge2_id, node_id, edges_with_nodes, nodes_df) {
+  # Get edge1
+  edge1 = edges_with_nodes %>% filter(edge_id == edge1_id)
+  # Get edge2
+  edge2 = edges_with_nodes %>% filter(edge_id == edge2_id)
+  
+  # Coordinates of the node
+  node_coords = nodes_df %>% filter(node_id == node_id) %>% select(X, Y) %>% unlist()
+  
+  # Get the other end of edge1
+  if (edge1$from_node_id == node_id) {
+    coords1 = c(edge1$x_end, edge1$y_end)
+  } else {
+    coords1 = c(edge1$x_start, edge1$y_start)
+  }
+  
+  # Get the other end of edge2
+  if (edge2$from_node_id == node_id) {
+    coords2 = c(edge2$x_end, edge2$y_end)
+  } else {
+    coords2 = c(edge2$x_start, edge2$y_start)
+  }
+  
+  # Vectors from the node to the other ends
+  vector1 = coords1 - node_coords
+  vector2 = coords2 - node_coords
+  
+  # Calculate angle in degrees
+  dot_prod = sum(vector1 * vector2)
+  mag1 = sqrt(sum(vector1^2))
+  mag2 = sqrt(sum(vector2^2))
+  cos_theta = dot_prod / (mag1 * mag2)
+  # Ensure cos_theta is within [-1, 1] to avoid NaNs
+  cos_theta = max(min(cos_theta, 1), -1)
+  angle_rad = acos(cos_theta)
+  angle_deg = angle_rad * (180 / pi)
+  
+  # Ensure angle is between 0 and 180 degrees
+  if (angle_deg > 180) {
+    angle_deg = 360 - angle_deg
+  }
+  
+  return(angle_deg)
+}
+
+```
+```{r}
+library(sf)
+library(dplyr)
+library(mapview)
+
+# Define the main stem (Edge 1)
+line1 = st_linestring(matrix(c(0, -5, 0, 10), ncol = 2, byrow = TRUE))
+edge1 = st_sf(edge_id = 1, geometry = st_sfc(line1, crs = 27700))
+
+# Define the left branch (Edge 2)
+line2 = st_linestring(matrix(c(0, 10, -5, 10), ncol = 2, byrow = TRUE))
+edge2 = st_sf(edge_id = 2, geometry = st_sfc(line2, crs = 27700))
+
+# Define the right branch (Edge 3)
+line3 = st_linestring(matrix(c(0, 10, 1, 20), ncol = 2, byrow = TRUE))
+edge3 = st_sf(edge_id = 3, geometry = st_sfc(line3, crs = 27700))
+
+# Combine into an sf object
+y_network = rbind(edge1, edge2, edge3)
+mapview(y_network, color = "black")
+```
+# latest remove dangles function
+```{r}
+# Load necessary libraries
+library(sf)
+library(dplyr)
+library(tidyr)
+library(igraph)
+library(units)
+library(lwgeom)
+library(mapview)
+
+# Define the remove_dangles function
+remove_dangles = function(network, 
+                           angle_threshold_low = 30, 
+                           angle_threshold_high = 170) {
+  
+  # Step 0: Assign edge_id if not present
+  if(!"edge_id" %in% colnames(network)) {
+    network = network %>%
+      mutate(edge_id = row_number())
+  }
+  
+  # Step 1: Extract start and end points of each edge
+  # Extract start points using st_startpoint
+  start_points = st_startpoint(network$geometry) %>%
+    st_coordinates() %>%
+    as.data.frame() %>%
+    rename(X = X, Y = Y) %>%
+    mutate(edge_id = network$edge_id,
+           type = "start")
+  
+  # Extract end points using st_endpoint
+  end_points = st_endpoint(network$geometry) %>%
+    st_coordinates() %>%
+    as.data.frame() %>%
+    rename(X = X, Y = Y) %>%
+    mutate(edge_id = network$edge_id,
+           type = "end")
+  
+  # Combine start and end points
+  all_nodes = rbind(start_points, end_points)
+  
+  # Step 2: Assign unique node IDs based on unique coordinates
+  unique_nodes = all_nodes %>%
+    distinct(X, Y) %>%
+    mutate(node_id = row_number())
+
+  # Step 3: Create an Edge List with From and To Node IDs
+  edge_list = all_nodes %>%
+    left_join(unique_nodes, by = c("X", "Y")) %>%
+    arrange(edge_id, desc(type == "start")) %>%  # Ensure 'start' comes before 'end'
+    group_by(edge_id) %>%
+    summarize(
+      from = first(node_id),  # 'start' node
+      to = last(node_id)      # 'end' node
+    ) %>%
+    ungroup()
+  
+  # Step 4: Build an igraph Object and Calculate Node Degrees
+  g = graph_from_data_frame(edge_list %>% select(from, to), directed = FALSE)
+  
+  # Compute node degrees
+  deg = degree(g)
+  
+  # Add degrees to unique_nodes
+  unique_nodes = unique_nodes %>%
+    mutate(degree = deg[node_id])
+  
+  # Step 5: Identify Candidate Dangles Based on Node Degrees
+  dangle_edges = edge_list %>%
+    mutate(
+      degree_from = unique_nodes$degree[from],
+      degree_to = unique_nodes$degree[to],
+      is_dangle = (degree_from == 1 | degree_to == 1)
+    ) %>%
+    filter(is_dangle)
+  
+  # If no candidate dangles, return the original network
+  if(nrow(dangle_edges) == 0) {
+    message("No dangles found in the network.")
+    return(network)
+  }
+  
+  # Step 6: Define the angle calculation function
+  calculate_angle_at_node = function(edge1, edge2, node_id, unique_nodes) {
+    # Get coordinates of the common node
+    node_coords = c(
+      unique_nodes$X[unique_nodes$node_id == node_id],
+      unique_nodes$Y[unique_nodes$node_id == node_id]
+    )
+    
+    # Function to get the other end coordinates
+    get_other_end = function(edge, node_id, unique_nodes) {
+      if (edge$from == node_id) {
+        c(
+          unique_nodes$X[unique_nodes$node_id == edge$to],
+          unique_nodes$Y[unique_nodes$node_id == edge$to]
+        )
+      } else {
+        c(
+          unique_nodes$X[unique_nodes$node_id == edge$from],
+          unique_nodes$Y[unique_nodes$node_id == edge$from]
+        )
+      }
+    }
+    
+    # Get the other end coordinates
+    coords1 = get_other_end(edge1, node_id, unique_nodes)
+    coords2 = get_other_end(edge2, node_id, unique_nodes)
+    
+    # Create vectors from the common node to the other ends
+    vector1 = coords1 - node_coords
+    vector2 = coords2 - node_coords
+    
+    # Calculate dot product and magnitudes
+    dot_prod = sum(vector1 * vector2)
+    mag1 = sqrt(sum(vector1^2))
+    mag2 = sqrt(sum(vector2^2))
+    
+    # Check for zero-length vectors
+    if (mag1 == 0 || mag2 == 0) {
+      return(NA)
+    }
+    
+    # Calculate cosine of the angle
+    cos_theta = dot_prod / (mag1 * mag2)
+    cos_theta = max(min(cos_theta, 1), -1)  # Handle numerical precision
+    
+    # Calculate angle in degrees
+    angle_deg = acos(cos_theta) * (180 / pi)
+    
+    return(angle_deg)
+  }
+  
+  # Step 7: Identify True Dangles Based on Angle Criteria
+  # Initialize a vector to store dangles to remove
+  dangles_to_remove = c()
+  
+  # Iterate over each candidate dangle
+  for(i in 1:nrow(dangle_edges)) {
+    edge = dangle_edges[i, ]
+    
+    # Identify the common node (junction node)
+    if(edge$degree_from == 1) {
+      common_node = edge$to
+    } else {
+      common_node = edge$from
+    }
+    
+    # Get all other edges connected to the common node
+    connected_edges = edge_list %>%
+      filter((from == common_node | to == common_node) & edge_id != edge$edge_id)
+    
+    # Initialize a flag to determine if the edge is a true dangle
+    is_true_dangle = TRUE
+    
+    # Calculate angles between the current edge and all other connected edges
+    for(j in 1:nrow(connected_edges)) {
+      other_edge = connected_edges[j, ]
+      tryCatch({
+        angle = calculate_angle_at_node(edge, other_edge, common_node, unique_nodes)
+      }, error = function(e) {
+        angle = 0
+      })
+
+      
+      # If angle is NA, skip dangle identification
+      if(is.na(angle)) {
+        is_true_dangle = FALSE
+        break
+      }
+      
+      # Check if the angle is outside the threshold
+      if(angle < angle_threshold_low | angle > angle_threshold_high) {
+        is_true_dangle = FALSE
+        break
+      }
+    }
+    edge$cal_angle = angle
+    # If all angles are within the thresholds, mark as dangle
+    if(is_true_dangle) {
+      dangles_to_remove = c(dangles_to_remove, edge$edge_id)
+    }
+  }
+
+
+  # Step 8: Remove Dangles and Return Cleaned Network
+  cleaned_network = network %>%
+    filter(!edge_id %in% dangles_to_remove)
+  
+  # Return only the cleaned network
+  return(cleaned_network)
+}
+
+``` 
+
+```{r}
+# Load necessary libraries
+library(sf)
+library(dplyr)
+library(mapview)
+library(igraph)
+
+# Define the sample Y-shaped network
+# Edge 1: Main Stem
+line1 = st_linestring(matrix(c(0, -5, 0, 10), ncol=2, byrow=TRUE))
+edge1 = st_sf(edge_id = 1, geometry = st_sfc(line1), crs = 27700)
+
+# Edge 2: Left Branch (Dangle)
+line2 = st_linestring(matrix(c(0, 10, -5, 10), ncol=2, byrow=TRUE))
+edge2 = st_sf(edge_id = 2, geometry = st_sfc(line2), crs = 27700)
+
+# Edge 3: Right Branch
+line3 = st_linestring(matrix(c(0, 10, 1, 20), ncol=2, byrow=TRUE))
+edge3 = st_sf(edge_id = 3, geometry = st_sfc(line3), crs = 27700)
+
+# Combine into a single sf object
+y_network = rbind(edge1, edge2, edge3)
+
+# Visualize the original network
+mapview(y_network, color = "red", layer.name = "Original Network")
+
+# Apply the remove_dangles function
+cleaned_network = remove_dangles(network = y_network, 
+                                   angle_threshold_low = 30, 
+                                   angle_threshold_high = 170)
+edin_offroad_net$edge_id = 1:nrow(edin_offroad_net)                                   
+cleaned_network_edin = remove_dangles(edin_offroad_net, angle_threshold_low = 30, angle_threshold_high = 170)
+mapview(cleaned_network_edin, color = "blue", layer.name = "Cleaned Network")
+# View the cleaned network
+print("Cleaned Network:")
+print(cleaned_network)
+
+# Visualize the cleaned network alongside the original network
+mapview(cleaned_network_edin, color = "blue", layer.name = "Cleaned Network") +
+  mapview(y_network, color = "red", layer.name = "Original Network", alpha = 0.5)
+
+```
+
+```{r}
+# Load necessary libraries
+library(sf)
+library(dplyr)
+library(tidyr)
+library(igraph)
+library(units)
+library(lwgeom)
+library(mapview)
+
+
+# Step 1: Define the network with explicit edge_ids
+# Edge 1: Main Stem
+line1 = st_linestring(matrix(c(0, -5, 0, 10), ncol=2, byrow=TRUE))
+edge1 = st_sf(edge_id = 1, geometry = st_sfc(line1), crs = 27700)
+
+# Edge 2: Left Branch (Dangle)
+line2 = st_linestring(matrix(c(0, 10, -5, 10), ncol=2, byrow=TRUE))
+edge2 = st_sf(edge_id = 2, geometry = st_sfc(line2), crs = 27700)
+
+# Edge 3: Right Branch
+line3 = st_linestring(matrix(c(0, 10, 1, 20), ncol=2, byrow=TRUE))
+edge3 = st_sf(edge_id = 3, geometry = st_sfc(line3), crs = 27700)
+
+# Combine into a single sf object
+y_network = edin_offroad_net
+
+# Step 2: Extract start and end points of each edge
+# Extract start points using st_startpoint
+start_points = st_startpoint(y_network$geometry) %>%
+  st_coordinates() %>%
+  as.data.frame() %>%
+  rename(X = X, Y = Y) %>%
+  mutate(edge_id = y_network$edge_id,
+         type = "start")
+
+# Extract end points using st_endpoint
+end_points = st_endpoint(y_network$geometry) %>%
+  st_coordinates() %>%
+  as.data.frame() %>%
+  rename(X = X, Y = Y) %>%
+  mutate(edge_id = y_network$edge_id,
+         type = "end")
+
+# Combine start and end points
+all_nodes = rbind(start_points, end_points)
+
+# Step 3: Assign unique node IDs
+# Assign unique node IDs based on unique coordinates
+unique_nodes = all_nodes %>%
+  distinct(X, Y) %>%
+  mutate(node_id = row_number())
+
+# View unique_nodes
+print("Unique Nodes:")
+print(unique_nodes)
+
+# Step 4: Create an Edge List with From and To Node IDs (Corrected)
+edge_list = all_nodes %>%
+  left_join(unique_nodes, by = c("X", "Y")) %>%
+  arrange(edge_id, desc(type == "start")) %>%  # Ensure 'start' comes before 'end'
+  group_by(edge_id) %>%
+  summarize(
+    from = first(node_id),  # 'start' node
+    to = last(node_id)      # 'end' node
+  ) %>%
+  ungroup()
+
+# View corrected edge_list
+print("Edge List:")
+print(edge_list)
+
+# Step 5: Build an igraph Object and Calculate Node Degrees
+g = graph_from_data_frame(edge_list %>% select(from, to), directed = FALSE)
+
+# Compute node degrees
+deg = degree(g)
+
+# Add degrees to unique_nodes
+unique_nodes = unique_nodes %>%
+  mutate(degree = deg[node_id])
+
+# View nodes with degrees
+print("Unique Nodes with Degrees:")
+print(unique_nodes)
+
+# Step 6: Identify Candidate Dangles Based on Node Degrees
+dangle_edges = edge_list %>%
+  mutate(
+    degree_from = unique_nodes$degree[from],
+    degree_to = unique_nodes$degree[to],
+    is_dangle = (degree_from == 1 | degree_to == 1)
+  ) %>%
+  filter(is_dangle)
+
+# View dangle_edges
+print("Candidate Dangle Edges:")
+print(dangle_edges)
+
+# Step 7: Calculate Angles to Confirm Dangles
+# Corrected function with accurate vector calculations
+calculate_angle_at_node = function(edge1, edge2, node_id, unique_nodes) {
+  # Get coordinates of the common node
+  node_coords = c(
+    unique_nodes$X[unique_nodes$node_id == node_id],
+    unique_nodes$Y[unique_nodes$node_id == node_id]
+  )
+  
+  # Get the other end coordinates, ensuring we're getting the point away from the junction
+  get_other_end = function(edge, node_id, unique_nodes) {
+    if (edge$from == node_id) {
+      c(
+        unique_nodes$X[unique_nodes$node_id == edge$to],
+        unique_nodes$Y[unique_nodes$node_id == edge$to]
+      )
+    } else {
+      c(
+        unique_nodes$X[unique_nodes$node_id == edge$from],
+        unique_nodes$Y[unique_nodes$node_id == edge$from]
+      )
+    }
+  }
+  
+  # Get vectors from junction to other ends
+  coords1 = get_other_end(edge1, node_id, unique_nodes)
+  coords2 = get_other_end(edge2, node_id, unique_nodes)
+  
+  # Create vectors (from junction to endpoints)
+  vector1 = coords1 - node_coords
+  vector2 = coords2 - node_coords
+  
+  # Print vectors for verification
+  cat("Vector1:", vector1[1], vector1[2], "\n")
+  cat("Vector2:", vector2[1], vector2[2], "\n")
+  
+  # Calculate dot product and magnitudes
+  dot_prod = sum(vector1 * vector2)
+  mag1 = sqrt(sum(vector1^2))
+  mag2 = sqrt(sum(vector2^2))
+  
+  # Print intermediate calculations
+  cat("Dot Product:", dot_prod, "\n")
+  cat("Magnitude of Vector1:", mag1, "\n")
+  cat("Magnitude of Vector2:", mag2, "\n")
+  
+  # Check for zero-length vectors
+  if (mag1 == 0 || mag2 == 0) {
+    cat("Error: Zero-length vector detected.\n")
+    return(NA)
+  }
+  
+  # Calculate angle in degrees
+  cos_theta = dot_prod / (mag1 * mag2)
+  cos_theta = max(min(cos_theta, 1), -1)  # Handle numerical precision
+  angle_deg = acos(cos_theta) * (180 / pi)
+  
+  cat("Calculated Angle:", angle_deg, "degrees\n")
+  
+  return(angle_deg)
+}
+
+# Initialize a vector to store dangles to remove
+dangles_to_remove = c()
+
+# Define angle thresholds
+angle_threshold_low = 30  # Degrees
+angle_threshold_high = 170  # Degrees
+
+# Define the main stem edge_id (e.g., Edge1)
+main_stem_edge_id = 1
+
+# Update dangle_edges to exclude the main stem
+dangle_edges_filtered = dangle_edges %>%
+  filter(edge_id != main_stem_edge_id)
+
+# Iterate over each dangle edge with enhanced debugging
+for (i in 1:nrow(dangle_edges_filtered)) {
+  edge = dangle_edges_filtered[i, ]
+  
+  # Identify the node with degree >=3 (common node)
+  if (unique_nodes$degree[edge$from] == 1) {
+    common_node = edge$to
+  } else {
+    common_node = edge$from
+  }
+  
+  # Print current edge and common node
+  cat("\nProcessing Edge ID:", edge$edge_id, "Common Node ID:", common_node, "\n")
+  
+  # Get all edges connected to the common node except the current edge
+  connected_edges = edge_list %>%
+    filter((from == common_node | to == common_node) & edge_id != edge$edge_id)
+  
+  # Check if there are any connected edges to compare angles
+  if (nrow(connected_edges) < 1) {
+    cat("No connected edges to compare. Skipping.\n")
+    next  # Skip if no other edges are connected
+  }
+  
+  # Calculate angles between the current edge and all other connected edges
+  angles = sapply(1:nrow(connected_edges), function(j) {
+    other_edge = connected_edges[j, ]
+    angle = calculate_angle_at_node(edge, other_edge, common_node, unique_nodes)
+    if (!is.na(angle)) {
+      cat("Angle with Edge ID:", other_edge$edge_id, "is", angle, "degrees\n")
+    } else {
+      cat("Angle with Edge ID:", other_edge$edge_id, "could not be calculated.\n")
+    }
+    return(angle)
+  })
+  
+  # Handle NA angles
+  if (any(is.na(angles))) {
+    cat("One or more angles are NA. Not marking as dangle.\n")
+    next
+  }
+  
+  # Determine if the edge is a dangle based on angles
+  # Criteria:
+  # - All angles >= angle_threshold_low AND <= angle_threshold_high: dangle
+  # - If any angle < angle_threshold_low OR > angle_threshold_high: not a dangle
+  if (all(angles >= angle_threshold_low & angles <= angle_threshold_high)) {
+    dangles_to_remove = c(dangles_to_remove, edge$edge_id)
+    cat("Edge ID:", edge$edge_id, "marked as dangle.\n")
+  } else {
+    cat("Edge ID:", edge$edge_id, "not marked as dangle due to angle criteria.\n")
+  }
+}
+
+# View dangles to remove
+cat("\nDangles to remove:", dangles_to_remove, "\n")
+
+# Step 8: Remove Dangles and Verify the Cleaned Network
+# Remove dangle edges from the network
+cleaned_network = y_network %>%
+  filter(!edge_id %in% dangles_to_remove)
+
+# View cleaned network
+print("Cleaned Network:")
+print(cleaned_network)
+
+# Step 9: Visualize the Results
+# Visualize the cleaned network and original network
+mapview(cleaned_network, color = "blue", layer.name = "Cleaned Network") +
+  mapview(y_network, color = "red", layer.name = "Original Network", alpha = 0.5)
+
+```
+
