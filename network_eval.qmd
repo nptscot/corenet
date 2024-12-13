@@ -4,22 +4,22 @@
 
 ```{r}
 library(sf)
-library(mapview)
 library(dplyr)
 library(igraph)
+library(ggraph)
+library(ggplot2)
+```
+
+```{r}
 rnet_core = sf::st_read("network_eval_file/city_of_edinburgh_2024-12-01_4_coherent_network.geojson")
 intermediate_zone = sf::st_read("network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg")
+intermediate_zone$geometry = intermediate_zone$geom
 od_data = itz = readRDS("network_eval_file/desire_lines.Rds")
 lads = sf::read_sf("network_eval_file/la_regions_scotland_bfe_simplified_2023.geojson")
-mapview(intermediate_zone) + mapview(rnet_core, color = "red") + mapview(od_data, color = "blue")
-
-names(lads)
-names(intermediate_zone)
-names(od_data)
+# mapview(intermediate_zone) + mapview(rnet_core, color = "red") + mapview(od_data, color = "blue")
 
 # Define target CRS
 crs_target = 27700
-
 # Transform datasets to the target CRS
 rnet_core = st_transform(rnet_core, crs = crs_target)
 intermediate_zone = st_transform(intermediate_zone, crs = crs_target)
@@ -32,48 +32,57 @@ lads = st_transform(lads, crs = crs_target)
 city_boundary  = lads |> filter(LAD23NM == "City of Edinburgh")
 intermediate_zone = st_make_valid(intermediate_zone)
 intermediate_zone = st_intersection(intermediate_zone, city_boundary)
-
 od_data = od_data[sf::st_union(city_boundary), , op = sf::st_intersects]
-
-mapview(intermediate_zone) + mapview(rnet_core, color = "red") + mapview(od_data, color = "blue") + mapview(lads, color = "green")
 ```
 
 ```{r}
 buffer_distance = 500
+
+# Create a 500m buffer around each network link
 network_buffer = st_buffer(rnet_core, dist = buffer_distance)
+
+# Union all buffer polygons to create a single buffered area
 buffer_union = st_union(network_buffer)
+
+# Intersect the buffered area with the city boundary
 buffer_intersection = st_intersection(buffer_union, city_boundary)
 
+# Calculate areas
 area_buffered = st_area(buffer_intersection)
 area_city = st_area(city_boundary)
 
+# Compute Spatial Coverage
 spatial_coverage = as.numeric(area_buffered / area_city)
 cat("Spatial Coverage:", round(spatial_coverage * 100, 2), "%\n")
 ```
+
 ```{r}
 # Prepare zones
 zones = intermediate_zone |>
-  select(InterZone, geom) |>
+  select(InterZone, geometry) |>
   st_make_valid()
 
 # Compute W = B_union ∩ A_city
 W = buffer_intersection
 
-# Compute W_i for each zone
+# Compute W_i for each zone using rowwise and list-columns
 zones = zones |>
   rowwise() |>
-  mutate(W_i = list(st_intersection(geom, W))) |>
+  mutate(W_i = list(st_intersection(geometry, W))) |>
   ungroup()
 
+# Identify zones with and without intersections
 zones = zones |>
   mutate(has_intersection = lengths(W_i) > 0)
 
+# Print zones without intersection
 if (any(!zones$has_intersection)) {
   cat("The following zones do not intersect with the buffered area W:\n")
   print(zones$InterZone[!zones$has_intersection])
 } else {
   cat("All zones intersect with the buffered area W.\n")
 }
+
 # Initialize adjacency matrix
 zone_ids = zones$InterZone
 num_zones = length(zone_ids)
@@ -85,22 +94,28 @@ colnames(adj_matrix) = zone_ids
 for (i in 1:num_zones) {
   for (j in i:num_zones) {
     if (i == j) {
-      adj_matrix[i, j] = 1
+      adj_matrix[i, j] = 1  # A zone is always connected to itself
     } else {
-      # Use double brackets to extract geometry from list-column
-      touches = st_touches(zones$W_i[[i]], zones$W_i[[j]], sparse = FALSE)
-      intersects = st_intersects(zones$W_i[[i]], zones$W_i[[j]], sparse = FALSE)
+      # Extract geometries from list-column
+      geom_i = zones$W_i[[i]]
+      geom_j = zones$W_i[[j]]
       
-      if (any(touches) | any(intersects)) {
+      # Check if W_i and W_j intersect or touch
+      intersects = st_intersects(geom_i, geom_j, sparse = FALSE)
+      touches = st_touches(geom_i, geom_j, sparse = FALSE)
+      
+      if (any(intersects) | any(touches)) {
         adj_matrix[i, j] = 1
-        adj_matrix[j, i] = 1
+        adj_matrix[j, i] = 1  # Symmetric matrix
       }
     }
   }
 }
 
-# Create graph and determine connected components
+# Create graph from adjacency matrix
 g = graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
+
+# Determine connected components
 components = clusters(g)
 
 # Output connectivity status
@@ -109,13 +124,16 @@ if (components$no == 1) {
 } else {
   cat("The buffered area has", components$no, "connected components, indicating fragmentation.\n")
   
+  # List zones in each component
   for (k in 1:components$no) {
     cat("Component", k, "includes zones:", paste(zone_ids[components$membership == k], collapse = ", "), "\n")
   }
 }
 
-# (Optional) Create connectivity indicator matrix
-connectivity_matrix = matrix(0, nrow = num_zones, ncol = num_zones)
+# Create connectivity indicator matrix C(z_i, z_j)
+connectivity_matrix = as_adjacency_matrix(g, type = "both")
+connectivity_matrix = as.matrix(connectivity_matrix)
+
 # Verify the connectivity matrix dimensions
 if (all(dim(connectivity_matrix) == c(num_zones, num_zones))) {
   cat("Connectivity matrix successfully created.\n")
@@ -123,29 +141,301 @@ if (all(dim(connectivity_matrix) == c(num_zones, num_zones))) {
   cat("Warning: Connectivity matrix dimensions do not match the number of zones.\n")
 }
 
+# Calculate centroids of each zone for plotting
 zones_centroid = st_centroid(zones)
-rownames(connectivity_matrix) = zone_ids
-colnames(connectivity_matrix) = zone_ids
 
-for (i in 1:num_zones) {
-  for (j in 1:num_zones) {
-    if (components$membership[i] == components$membership[j]) {
-      connectivity_matrix[i, j] = 1
-    }
-  }
-}
+# Extract coordinates from centroids
+coords = st_coordinates(zones_centroid)
 
-library(ggraph)
-library(ggplot2)
+# Create a matrix of coordinates
+layout_coords = as.matrix(coords[, 1:2])
 
-# Convert the igraph object to include coordinates
-ggraph_data = ggraph(g, layout = "manual", x = layout_coords[,1], y = layout_coords[,2])
+# Assign row names to match the graph's vertex names
+rownames(layout_coords) = zones$InterZone
 
-# Plot using ggraph
+# Ensure that the order of layout_coords matches the graph's vertex order
+layout_coords = layout_coords[V(g)$name, ]
+
+# Plot the graph using ggraph with geographical layout
 ggraph(g, layout = "manual", x = layout_coords[,1], y = layout_coords[,2]) +
   geom_edge_link(color = "grey") +
   geom_node_point(color = "skyblue", size = 3) +
   geom_node_text(aes(label = name), vjust = -1, size = 3) +
   theme_minimal() +
-  ggtitle("Connectivity Graph with Geographical Layout")
+  ggtitle("Connectivity Graph with Geographical Layout") +
+  coord_fixed()  # Ensures equal scaling on both axes
+
+```
+
+```{r}
+# Number of connected components
+num_components <- components$no
+cat("Number of Connected Components:", num_components, "\n")
+
+# 1. Size of the Largest Connected Component
+largest_component_size <- max(components$csize)
+proportion_largest <- largest_component_size / vcount(g)
+cat("Largest Component Size:", largest_component_size, "(", round(proportion_largest * 100, 2), "% of zones)\n")
+
+
+# 2. Network Density
+network_density <- edge_density(g, loops = FALSE)
+cat("Network Density:", round(network_density * 100, 2), "%\n")
+
+# 3. Average Path Length
+if (num_components > 1) {
+  # Extract the largest connected component
+  largest_component_nodes <- V(g)[components$membership == which.max(components$csize)]
+  subgraph_largest <- induced_subgraph(g, largest_component_nodes)
+  
+  # Average Path Length for the largest component using mean_distance()
+  avg_path_length <- mean_distance(subgraph_largest, directed = FALSE)
+  cat("Average Path Length (Largest Component):", round(avg_path_length, 2), "\n")
+} else {
+  # If fully connected, calculate for the entire graph
+  avg_path_length <- mean_distance(g, directed = FALSE)
+  cat("Average Path Length:", round(avg_path_length, 2), "\n")
+}
+
+
+# 4. Global Efficiency
+global_efficiency <- global_efficiency(g)
+cat("Global Efficiency:", round(global_efficiency, 4), "\n")
+
+
+# 5. Local Efficiency
+local_efficiency <- local_efficiency(g)
+# Handle NA values which can occur in disconnected networks
+local_efficiency[is.na(local_efficiency)] <- 0
+average_local_efficiency <- mean(local_efficiency)
+cat("Average Local Efficiency:", round(average_local_efficiency, 4), "\n")
+
+
+# Clustering Coefficient
+clustering_coeff <- transitivity(g, type = "global")
+cat("Clustering Coefficient:", round(clustering_coeff, 4), "\n")
+
+# Compile metrics into a data frame
+connectivity_metrics <- data.frame(
+  Metric = c(
+    "Number of Connected Components",
+    "Largest Component Size",
+    "Proportion of Largest Component",
+    "Network Density (%)",
+    "Average Path Length",
+    "Global Efficiency",
+    "Average Local Efficiency",
+    "Clustering Coefficient"
+  ),
+  Value = c(
+    num_components,
+    largest_component_size,
+    round(proportion_largest * 100, 2),
+    round(network_density * 100, 2),
+    round(avg_path_length, 2),
+    round(global_efficiency, 4),
+    round(average_local_efficiency, 4),
+    round(clustering_coeff, 4)
+  )
+)
+
+# Display the metrics
+print(connectivity_metrics)
+
+# Load ggplot2 if not already loaded
+library(ggplot2)
+
+# Plot metrics as a bar chart
+ggplot(connectivity_metrics, aes(x = Metric, y = Value)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Connectivity Metrics of Cycling Network") +
+  ylab("Value") +
+  xlab("Metric")
+
+```
+
+
+```{r}
+rnet_city = sf::st_read("network_eval_file/combined_network_tile.geojson") |> st_transform(crs_target)
+
+# Assign cycling potential from rnet_core
+rnet_core <- rnet_core %>%
+  mutate(cycling_potential = all_fastest_bicycle_go_dutch)
+
+zones <- intermediate_zone %>%
+  select(InterZone, TotPop2011, geometry) %>%
+  st_make_valid()
+```
+
+```{r}
+# Define buffer distance in meters
+buffer_distance <- 500
+
+# Create a 500m buffer around each network link in rnet_core
+network_buffer <- st_buffer(rnet_core, dist = buffer_distance)
+
+# Union all buffer polygons to create a single buffered area
+buffer_union <- st_union(network_buffer)
+
+# Intersect the buffered area with the city boundary
+buffer_intersection <- st_intersection(buffer_union, city_boundary)
+
+P_total <- sum(rnet_city$all_fastest_bicycle_go_dutch, na.rm = TRUE)
+cat("Total Cycling Potential in the City (P_total):", P_total, "\n")
+
+# Ensure that rnet_core is clipped to the buffered area
+rnet_core_buffered <- st_intersection(rnet_core, buffer_intersection)
+
+# Calculate P(U_city): Total cycling potential within the buffered area
+P_U_city <- sum(rnet_core_buffered$cycling_potential, na.rm = TRUE)
+cat("Cycling Potential within Buffered Area (P(U_city)):", P_U_city, "\n")
+
+# Compute Cycling Potential Coverage
+cycling_potential_coverage <- P_U_city / P_total
+cat("Cycling Potential Coverage:", round(cycling_potential_coverage * 100, 2), "%\n")
+
+```
+
+```{r}
+# Calculate centroids of each zone
+zones_centroid <- st_centroid(zones)
+# Calculate the shortest distance from each centroid to the core network
+zones_centroid <- zones_centroid %>%
+  mutate(distance_to_network = st_distance(geometry, st_union(rnet_core)))
+
+# Convert distance from units to numeric (meters)
+zones_centroid$distance_to_network <- as.numeric(zones_centroid$distance_to_network)
+
+# Define threshold distance in meters
+dist_threshold <- 500
+
+# Identify zones where distance <= threshold
+zones_within_threshold <- zones_centroid %>%
+  filter(distance_to_network <= dist_threshold)
+
+# Sum population within threshold
+pop_within <- sum(zones_within_threshold$TotPop2011, na.rm = TRUE)
+
+# Sum total population
+pop_total <- sum(zones$TotPop2011, na.rm = TRUE)
+
+# Compute Population Coverage
+population_coverage <- pop_within / pop_total
+cat("Population Coverage:", round(population_coverage * 100, 2), "%\n")
+
+```
+
+
+```{r}
+# Define buffer distance in meters
+buffer_distance <- 500
+
+# Create a 500m buffer around each network link in rnet_core
+network_buffer <- st_buffer(rnet_core, dist = buffer_distance)
+
+# Union all buffer polygons to create a single buffered area
+buffer_union <- st_union(network_buffer)
+
+# Intersect the buffered area with the city boundary
+buffer_intersection <- st_intersection(buffer_union, city_boundary)
+
+# Assign cycling potential from rnet_core
+rnet_core <- rnet_core %>%
+  mutate(cycling_potential = all_fastest_bicycle_go_dutch)
+
+# Prepare zones with necessary attributes
+zones <- intermediate_zone %>%
+  select(InterZone, TotPop2011, geometry) %>%
+  st_make_valid()
+
+# Calculate P_total: Total cycling potential in the city
+P_total <- sum(rnet_city$all_fastest_bicycle_go_dutch, na.rm = TRUE)
+cat("Total Cycling Potential in the City (P_total):", P_total, "\n")
+
+# Calculate P(U_city): Total cycling potential within the buffered area
+# Clip rnet_core to the buffered area
+rnet_core_buffered <- st_intersection(rnet_core, buffer_intersection)
+
+# Calculate P(U_city)
+P_U_city <- sum(rnet_core_buffered$cycling_potential, na.rm = TRUE)
+cat("Cycling Potential within Buffered Area (P(U_city)):", P_U_city, "\n")
+
+# Compute Cycling Potential Coverage
+cycling_potential_coverage <- P_U_city / P_total
+cat("Cycling Potential Coverage:", round(cycling_potential_coverage * 100, 2), "%\n")
+
+# -------------------------------
+# Population Coverage Calculation
+# -------------------------------
+
+# Calculate centroids of each zone
+zones_centroid <- st_centroid(zones)
+
+# Calculate the shortest distance from each centroid to the core network
+zones_centroid <- zones_centroid %>%
+  mutate(distance_to_network = st_distance(geometry, st_union(rnet_core)))
+
+# Convert distance from units to numeric (meters)
+zones_centroid$distance_to_network <- as.numeric(zones_centroid$distance_to_network)
+
+# Define threshold distance in meters
+dist_threshold <- 500
+
+# Identify zones where distance <= threshold
+zones_within_threshold <- zones_centroid %>%
+  filter(distance_to_network <= dist_threshold)
+
+# Sum population within threshold
+pop_within <- sum(zones_within_threshold$TotPop2011, na.rm = TRUE)
+
+# Sum total population
+pop_total <- sum(zones$TotPop2011, na.rm = TRUE)
+
+# Compute Population Coverage
+population_coverage <- pop_within / pop_total
+cat("Population Coverage:", round(population_coverage * 100, 2), "%\n")
+```
+
+
+```{r}
+# Spatially join zones with buffered area to identify accessible zones
+zones_buffered <- st_intersection(zones, buffer_intersection)
+
+# Create a flag for zones within the buffer
+zones <- zones %>%
+  mutate(within_buffer = InterZone %in% zones_buffered$InterZone)
+
+# Plot cycling potential with buffer overlay
+ggplot() +
+  geom_sf(data = zones, aes(fill = cycling_potential), color = "black", size = 0.2) +
+  geom_sf(data = buffer_union, fill = NA, color = "blue", size = 0.5) +
+  scale_fill_viridis_c(option = "plasma") +
+  theme_minimal() +
+  ggtitle("Cycling Potential Across Zones with 500m Buffer") +
+  theme(legend.position = "right")
+```
+
+```{r}
+# Add a flag for zones within threshold distance
+zones_centroid <- zones_centroid %>%
+  mutate(within_threshold = distance_to_network <= dist_threshold)
+
+# Merge the flag back to zones
+zones <- zones %>%
+  left_join(
+    zones_centroid %>% select(InterZone, within_threshold),
+    by = "InterZone"
+  )
+
+# Plot population coverage
+ggplot() +
+  geom_sf(data = zones, aes(fill = within_threshold), color = "black", size = 0.2) +
+  scale_fill_manual(values = c("FALSE" = "lightgrey", "TRUE" = "green"), 
+                    labels = c("Outside 500m", "Within 500m"),
+                    name = "Population Coverage") +
+  theme_minimal() +
+  ggtitle("Population Coverage within 500m of Cycling Network") +
+  theme(legend.position = "right")
 ```
