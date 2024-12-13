@@ -1,0 +1,151 @@
+- coherent network
+- intermediate zone
+- od data
+
+```{r}
+library(sf)
+library(mapview)
+library(dplyr)
+library(igraph)
+rnet_core = sf::st_read("network_eval_file/city_of_edinburgh_2024-12-01_4_coherent_network.geojson")
+intermediate_zone = sf::st_read("network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg")
+od_data = itz = readRDS("network_eval_file/desire_lines.Rds")
+lads = sf::read_sf("network_eval_file/la_regions_scotland_bfe_simplified_2023.geojson")
+mapview(intermediate_zone) + mapview(rnet_core, color = "red") + mapview(od_data, color = "blue")
+
+names(lads)
+names(intermediate_zone)
+names(od_data)
+
+# Define target CRS
+crs_target = 27700
+
+# Transform datasets to the target CRS
+rnet_core = st_transform(rnet_core, crs = crs_target)
+intermediate_zone = st_transform(intermediate_zone, crs = crs_target)
+od_data = st_transform(od_data, crs = crs_target)
+lads = st_transform(lads, crs = crs_target)
+```
+
+#  Spatial Coverage 
+```{r}
+city_boundary  = lads |> filter(LAD23NM == "City of Edinburgh")
+intermediate_zone = st_make_valid(intermediate_zone)
+intermediate_zone = st_intersection(intermediate_zone, city_boundary)
+
+od_data = od_data[sf::st_union(city_boundary), , op = sf::st_intersects]
+
+mapview(intermediate_zone) + mapview(rnet_core, color = "red") + mapview(od_data, color = "blue") + mapview(lads, color = "green")
+```
+
+```{r}
+buffer_distance = 500
+network_buffer = st_buffer(rnet_core, dist = buffer_distance)
+buffer_union = st_union(network_buffer)
+buffer_intersection = st_intersection(buffer_union, city_boundary)
+
+area_buffered = st_area(buffer_intersection)
+area_city = st_area(city_boundary)
+
+spatial_coverage = as.numeric(area_buffered / area_city)
+cat("Spatial Coverage:", round(spatial_coverage * 100, 2), "%\n")
+```
+```{r}
+# Prepare zones
+zones = intermediate_zone |>
+  select(InterZone, geom) |>
+  st_make_valid()
+
+# Compute W = B_union ∩ A_city
+W = buffer_intersection
+
+# Compute W_i for each zone
+zones = zones |>
+  rowwise() |>
+  mutate(W_i = list(st_intersection(geom, W))) |>
+  ungroup()
+
+zones = zones |>
+  mutate(has_intersection = lengths(W_i) > 0)
+
+if (any(!zones$has_intersection)) {
+  cat("The following zones do not intersect with the buffered area W:\n")
+  print(zones$InterZone[!zones$has_intersection])
+} else {
+  cat("All zones intersect with the buffered area W.\n")
+}
+# Initialize adjacency matrix
+zone_ids = zones$InterZone
+num_zones = length(zone_ids)
+adj_matrix = matrix(0, nrow = num_zones, ncol = num_zones)
+rownames(adj_matrix) = zone_ids
+colnames(adj_matrix) = zone_ids
+
+# Create adjacency based on W_i connectivity
+for (i in 1:num_zones) {
+  for (j in i:num_zones) {
+    if (i == j) {
+      adj_matrix[i, j] = 1
+    } else {
+      # Use double brackets to extract geometry from list-column
+      touches = st_touches(zones$W_i[[i]], zones$W_i[[j]], sparse = FALSE)
+      intersects = st_intersects(zones$W_i[[i]], zones$W_i[[j]], sparse = FALSE)
+      
+      if (any(touches) | any(intersects)) {
+        adj_matrix[i, j] = 1
+        adj_matrix[j, i] = 1
+      }
+    }
+  }
+}
+
+# Create graph and determine connected components
+g = graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
+components = clusters(g)
+
+# Output connectivity status
+if (components$no == 1) {
+  cat("The buffered area provides continuous corridors connecting all zones.\n")
+} else {
+  cat("The buffered area has", components$no, "connected components, indicating fragmentation.\n")
+  
+  for (k in 1:components$no) {
+    cat("Component", k, "includes zones:", paste(zone_ids[components$membership == k], collapse = ", "), "\n")
+  }
+}
+
+# (Optional) Create connectivity indicator matrix
+connectivity_matrix = matrix(0, nrow = num_zones, ncol = num_zones)
+# Verify the connectivity matrix dimensions
+if (all(dim(connectivity_matrix) == c(num_zones, num_zones))) {
+  cat("Connectivity matrix successfully created.\n")
+} else {
+  cat("Warning: Connectivity matrix dimensions do not match the number of zones.\n")
+}
+
+zones_centroid = st_centroid(zones)
+rownames(connectivity_matrix) = zone_ids
+colnames(connectivity_matrix) = zone_ids
+
+for (i in 1:num_zones) {
+  for (j in 1:num_zones) {
+    if (components$membership[i] == components$membership[j]) {
+      connectivity_matrix[i, j] = 1
+    }
+  }
+}
+
+library(ggraph)
+library(ggplot2)
+
+# Convert the igraph object to include coordinates
+ggraph_data = ggraph(g, layout = "manual", x = layout_coords[,1], y = layout_coords[,2])
+
+# Plot using ggraph
+ggraph(g, layout = "manual", x = layout_coords[,1], y = layout_coords[,2]) +
+  geom_edge_link(color = "grey") +
+  geom_node_point(color = "skyblue", size = 3) +
+  geom_node_text(aes(label = name), vjust = -1, size = 3) +
+  theme_minimal() +
+  ggtitle("Connectivity Graph with Geographical Layout")
+```
