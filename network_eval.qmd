@@ -8,6 +8,7 @@ library(dplyr)
 library(igraph)
 library(ggraph)
 library(ggplot2)
+library(mapview)
 ```
 
 ```{r}
@@ -36,7 +37,7 @@ od_data = od_data[sf::st_union(city_boundary), , op = sf::st_intersects]
 ```
 
 ```{r}
-buffer_distance = 500
+buffer_distance = 50
 
 # Create a 500m buffer around each network link
 network_buffer = st_buffer(rnet_core, dist = buffer_distance)
@@ -54,6 +55,8 @@ area_city = st_area(city_boundary)
 # Compute Spatial Coverage
 spatial_coverage = as.numeric(area_buffered / area_city)
 cat("Spatial Coverage:", round(spatial_coverage * 100, 2), "%\n")
+
+mapview(city_boundary) + mapview(network_buffer, color = "blue", alpha = 0.5)
 ```
 
 ```{r}
@@ -270,26 +273,14 @@ zones <- intermediate_zone %>%
 ```
 
 ```{r}
-# Define buffer distance in meters
-buffer_distance <- 500
-
-# Create a 500m buffer around each network link in rnet_core
-network_buffer <- st_buffer(rnet_core, dist = buffer_distance)
-
-# Union all buffer polygons to create a single buffered area
-buffer_union <- st_union(network_buffer)
-
-# Intersect the buffered area with the city boundary
-buffer_intersection <- st_intersection(buffer_union, city_boundary)
-
 P_total <- sum(rnet_city$all_fastest_bicycle_go_dutch, na.rm = TRUE)
 cat("Total Cycling Potential in the City (P_total):", P_total, "\n")
+rnet_core_buffer = st_buffer(rnet_core, 20)
 
-# Ensure that rnet_core is clipped to the buffered area
-rnet_core_buffered <- st_intersection(rnet_core, buffer_intersection)
+rnet_city_buffer = rnet_city[st_union(rnet_core_buffer), , op = st_within]
 
 # Calculate P(U_city): Total cycling potential within the buffered area
-P_U_city <- sum(rnet_core_buffered$cycling_potential, na.rm = TRUE)
+P_U_city <- sum(rnet_city_buffer$all_fastest_bicycle_go_dutch, na.rm = TRUE)
 cat("Cycling Potential within Buffered Area (P(U_city)):", P_U_city, "\n")
 
 # Compute Cycling Potential Coverage
@@ -409,7 +400,7 @@ zones <- zones %>%
 
 # Plot cycling potential with buffer overlay
 ggplot() +
-  geom_sf(data = zones, aes(fill = cycling_potential), color = "black", size = 0.2) +
+  geom_sf(data = zones, aes(fill = TotPop2011), color = "black", size = 0.2) +
   geom_sf(data = buffer_union, fill = NA, color = "blue", size = 0.5) +
   scale_fill_viridis_c(option = "plasma") +
   theme_minimal() +
