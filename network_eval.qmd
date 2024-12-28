@@ -584,7 +584,7 @@ compute_cycling_potential_coverage <- function(rnet_city, city_boundary, rnet_co
   
   # Compute length of each segment
   rnet_city <- rnet_city %>%
-    mutate(length_m = st_length(geometry))
+    mutate(length_m = as.numeric(st_length(geometry))) 
   
   # Total city potential (sum of all_fastest_bicycle_go_dutch)
   P_total <- sum(rnet_city$all_fastest_bicycle_go_dutch, na.rm = TRUE)
@@ -747,6 +747,9 @@ compute_directness_efficiency <- function(rnet_core) {
 }
 
 
+rnet_core = sf::st_read("network_eval_file/city_of_edinburgh_2024-12-01_3_coherent_network.geojson")
+intermediate_zone = sf::st_read("network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg")
+rnet_city = sf::st_read("network_eval_file/combined_network_tile.geojson") |> st_transform(27700)
 # 1. Compute Spatial Coverage
 sp_cov_result <- compute_spatial_coverage(rnet_core, city_boundary)
 cat("Spatial Coverage:", round(sp_cov_result$coverage * 100, 2), "%\n")
@@ -808,32 +811,31 @@ directness         <- de_result$D
 global_efficiency  <- de_result$E_glob
 local_efficiency   <- de_result$E_loc
 
-df_metrics <- data.frame(
-  SpatialCoverage           = spatial_coverage,            # e.g. 0-100
-  ZoneConnectivity          = zone_connectivity,           # e.g. 0-100
-  CyclingPotentialCoverage  = cycling_potential_coverage,  # e.g. 0-100
-  CitywideDensityRatio      = citywide_density_ratio_scaled, 
-  PopulationCoverage        = population_coverage,         # e.g. 0-100
-  ODCoverageCountBased      = od_coverage_count,           # e.g. 0-100
-  ODCoverageDemandWeighted  = od_coverage_demand,          # e.g. 0-100
-  Directness                = directness_scaled,           # e.g. 0-100
-  GlobalEfficiency          = global_efficiency_scaled,    # e.g. 0-100
-  LocalEfficiency           = local_efficiency_scaled      # e.g. 0-100
+# 1) Create the base data frame of metrics
+df_metrics_scaled <- data.frame(
+  SpatialCoverage          = df_metrics_numeric$SpatialCoverage / 100,
+  ZoneConnectivity         = df_metrics_numeric$ZoneConnectivity / 100,
+  CyclingPotentialCoverage = df_metrics_numeric$CyclingPotentialCoverage / 100,
+  CitywideDensityRatio     = df_metrics_numeric$CitywideDensityRatio / 5,
+  PopulationCoverage       = df_metrics_numeric$PopulationCoverage / 100,
+  ODCoverageCountBased     = df_metrics_numeric$ODCoverageCountBased / 100,
+  ODCoverageDemandWeighted = df_metrics_numeric$ODCoverageDemandWeighted / 100,
+  Directness               = df_metrics_numeric$Directness,         # Already 0–1
+  GlobalEfficiency         = df_metrics_numeric$GlobalEfficiency,   # Already 0–1
+  LocalEfficiency          = df_metrics_numeric$LocalEfficiency     # Already 0–1
 )
 
-# Optional: If you prefer to keep fewer metrics in your radar chart,
-# remove or comment out lines to show just the ones you want.
-# You can define uniform boundaries or use observed max/min:
-max_vals <- apply(df_metrics, 2, max, na.rm = TRUE)
-min_vals <- rep(0, ncol(df_metrics))  # set everything to start at 0
+# 3) Create top/bottom rows for fmsb
+max_vals <- rep(1, ncol(df_metrics_scaled))
+min_vals <- rep(0, ncol(df_metrics_scaled))
 
-# If you prefer a consistent 100 across all metrics:
-# max_vals <- rep(100, ncol(df_metrics))
+df_radar <- rbind(
+  max_vals,
+  min_vals,
+  df_metrics_scaled
+)
 
-df_radar <- rbind(max_vals, min_vals, df_metrics)
-
-# fmsb will read the first two rows as the upper and lower range for the axes
-# Optional: rename columns for nicer display in legend/axes
+# 5) Rename columns for display on the radar
 colnames(df_radar) <- c(
   "Spatial\nCoverage",
   "Zone\nConnectivity",
@@ -847,24 +849,21 @@ colnames(df_radar) <- c(
   "Local\nEfficiency"
 )
 
-# Now, call radarchart
+# 6) Plot the radar chart
 radarchart(
   df_radar,
-  axistype = 1,    # type of axis (see ?radarchart)
-  seg = 5,         # how many segments on each axis
-  pcol = rgb(0.2, 0.5, 0.5, 0.9),  # polygon line color
-  pfcol = rgb(0.2, 0.5, 0.5, 0.5), # fill color
-  plwd = 2,                        # polygon line width
-  cglcol = "grey",                 # grid line color
-  cglty = 1,                       # grid line type
-  axislabcol = "grey",
-  caxislabels = seq(0, max(max_vals), length.out = 6),  # axis label breaks
+  axistype = 1,
+  seg = 5,
+  pcol  = rgb(0.2, 0.5, 0.5, 0.9),   # line color
+  pfcol = rgb(0.2, 0.5, 0.5, 0.5),   # fill color (with some transparency)
+  plwd  = 2,                         # line width
+  cglcol = "grey",                   # grid line color
+  cglty = 1,                         # grid line type
+  axislabcol = "grey",              # axis label color
+  caxislabels = seq(0, max(max_vals), length.out = 6),  # radial axis labels
   title = "City Cycling Infrastructure - Radar Chart"
 )
 
-# If you have multiple scenarios or multiple rows of data to compare,
-# you can add more rows to df_radar after the first two min/max rows.
-# For each row beyond the second, radarchart will add another polygon.
 
 ```
 
