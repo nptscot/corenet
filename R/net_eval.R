@@ -2,9 +2,9 @@
 compute_spatial_coverage = function(rnet_core, lads, city_name = "City of Edinburgh", buffer_distance = 500) {
 
   city_boundary  = lads |> filter(LAD23NM == city_name)
-  rnet_core = sf::st_intersection(rnet_core, city_boundary)
+  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
   # Create a buffer around the network
-  network_buffer = st_buffer(rnet_core, dist = buffer_distance)
+  network_buffer = st_buffer(rnet_core_zone, dist = buffer_distance)
   # Union all buffer polygons
   buffer_union = st_union(network_buffer)
   # Intersect with city boundary
@@ -93,7 +93,7 @@ compute_cycling_potential_coverage = function(rnet_npt, lads, city_name = "City 
   
   # Filter city network to within the city boundary
   city_boundary  = lads |> filter(LAD23NM == city_name)
-  rnet_core = sf::st_intersection(rnet_core, city_boundary)
+  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
   rnet_city = sf::st_intersection(rnet_npt, city_boundary)
   
   # Compute length of each segment
@@ -110,7 +110,7 @@ compute_cycling_potential_coverage = function(rnet_npt, lads, city_name = "City 
   D_city = P_total / L_city
   
   # Create a buffer around the core network
-  rnet_core_buffer = st_buffer(rnet_core, buffer_distance)
+  rnet_core_buffer = st_buffer(rnet_core_zone, buffer_distance)
   
   # Extract segments within the buffer
   rnet_city_buffer = rnet_city[st_union(rnet_core_buffer), , op = st_within]
@@ -141,14 +141,14 @@ compute_cycling_potential_coverage = function(rnet_npt, lads, city_name = "City 
 compute_population_coverage = function(intermediate_zone, lads, city_name = "City of Edinburgh", rnet_core, dist_threshold = 500) {
   city_boundary  = lads |> filter(LAD23NM == city_name)
   intermediate_zone = sf::st_intersection(intermediate_zone, city_boundary)
-  rnet_core = sf::st_intersection(rnet_core, city_boundary)
+  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
 
   zones = intermediate_zone |>
     select(InterZone, TotPop2011, StdAreaKm2, geometry) |>
     st_make_valid() |>
     mutate(pop_density = TotPop2011 / StdAreaKm2)
   
-  rnet_core_buffer = st_buffer(rnet_core, dist_threshold)
+  rnet_core_buffer = st_buffer(rnet_core_zone, dist_threshold)
   W = st_intersection(st_union(rnet_core_buffer), city_boundary)
   
   zones_coverage = st_intersection(zones, W)
@@ -168,9 +168,9 @@ compute_population_coverage = function(intermediate_zone, lads, city_name = "Cit
 ### Function: Compute O-D Accessibility
 compute_od_accessibility = function(od_data, rnet_core, lads, city_name = "City of Edinburgh", dist_threshold = 500) {
   city_boundary  = lads |> filter(LAD23NM == city_name)
-  rnet_core = sf::st_intersection(rnet_core, city_boundary)
+  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
   od_data = sf::st_intersection(od_data, city_boundary) |> sf::st_cast("LINESTRING")
-  rnet_core_union = st_union(rnet_core)
+  rnet_core_union = st_union(rnet_core_zone)
   od_midpoints = st_line_sample(od_data, sample = 0.5)
   od_data_mid = st_as_sf(data.frame(od_data), geometry = od_midpoints)
   
@@ -197,9 +197,9 @@ compute_od_accessibility = function(od_data, rnet_core, lads, city_name = "City 
 ### Function: Compute Directness and Efficiency
 compute_directness_efficiency = function(rnet_core, lads, city_name = "City of Edinburgh") {
   city_boundary  = lads |> filter(LAD23NM == city_name)
-  rnet_core = sf::st_intersection(rnet_core, city_boundary) |> st_cast("LINESTRING")
+  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary) |> st_cast("LINESTRING")
 
-  network_sfnet = as_sfnetwork(rnet_core, directed = FALSE)
+  network_sfnet = as_sfnetwork(rnet_core_zone, directed = FALSE)
   network_sfnet = network_sfnet |>
     activate("edges") |>
     mutate(weight = as.numeric(st_length(geometry))) 
@@ -313,6 +313,7 @@ generate_radar_chart = function(city_name,
     CyclingPotentialCoverage = cycling_potential_coverage,
     CitywideDensityRatio     = citywide_density_ratio,
     PopulationCoverage       = population_coverage,
+    AvgODDistance            = od_result$avg_distance,
     ODCoverageCountBased     = od_coverage_count,
     ODCoverageDemandWeighted = od_coverage_demand,
     Directness               = directness,
@@ -327,6 +328,7 @@ generate_radar_chart = function(city_name,
     CyclingPotentialCoverage = df_metrics_numeric$CyclingPotentialCoverage / 100,
     CitywideDensityRatio     = df_metrics_numeric$CitywideDensityRatio / 5,
     PopulationCoverage       = df_metrics_numeric$PopulationCoverage / 100,
+    AvgODDistance            = df_metrics_numeric$AvgODDistance / 1000,
     ODCoverageCountBased     = df_metrics_numeric$ODCoverageCountBased / 100,
     ODCoverageDemandWeighted = df_metrics_numeric$ODCoverageDemandWeighted / 100,
     Directness               = df_metrics_numeric$Directness,
@@ -348,9 +350,10 @@ generate_radar_chart = function(city_name,
   colnames(df_radar) = c(
     "Spatial\nCoverage",
     "Zone\nConnectivity",
-    "Cycling\nPotential",
+    "Cycling Potential\nCoverage",
     "Density\nRatio",
     "Pop.\nCoverage",
+    "Avg.\nOD\nDistance",
     "OD\nCoverage\n(Count)",
     "OD\nCoverage\n(Demand)",
     "Directness",
@@ -363,7 +366,7 @@ generate_radar_chart = function(city_name,
     # Open a PNG device to save the plot
     png(filename = save_path, width = 800, height = 800)
   }
-  
+
   radarchart(
     df_radar,
     axistype = 1,
@@ -375,7 +378,12 @@ generate_radar_chart = function(city_name,
     cglty = 1,
     axislabcol = "grey",
     caxislabels = seq(0, max(max_vals), length.out = 6),
-    title = paste("Cycling Infrastructure Assessment\n", city_name)
+    title = paste(city_name),
+    # Increase font sizes
+    cex.axis = 2,    # Axis label size
+    cex.lab = 2,     # Axis title size (if applicable)
+    cex.main = 2,       # Main title size
+    vlcex = 1.5
   )
   
   if (!is.null(save_path)) {

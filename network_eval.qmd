@@ -18,16 +18,18 @@ source("R/net_eval.R")
 ```
 
 ```{r}
-rnet_core = sf::st_read("network_eval_file/combined_CN_3_2024-12-01_OS.geojson")
+rnet_core = sf::st_read("network_eval_file/combined_CN_4_2024-12-01_OS.geojson")
 
 intermediate_zone = sf::st_read("network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg")
 intermediate_zone$geometry = intermediate_zone$geom
-
-od_data = readRDS("network_eval_file/desire_lines.Rds")
+mapview(intermediate_zone)
+od_data = readRDS("network_eval_file/od_izo_sf.Rds")
 
 lads = sf::read_sf("network_eval_file/la_regions_scotland_bfe_simplified_2023.geojson") |> st_transform(27700)
 
-rnet_npt = sf::st_read("network_eval_file/combined_network_tile.geojson") |> st_transform(27700)
+rnet_npt = sf::st_read("network_eval_file/combined_network.gpkg") |> st_transform(27700)
+
+rnet_npt$geometry = rnet_npt$geom
 
 # Define target CRS
 crs_target = 27700
@@ -38,9 +40,9 @@ od_data = st_transform(od_data, crs = crs_target)
 lads = st_transform(lads, crs = crs_target)
 ```
 ```{r}
-city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City", "Stirling")
+city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
 
-for (city_name in city_names[2]) {
+for (city_name in city_names) {
   generate_radar_chart(
     city_name = city_name,
     rnet_core = rnet_core,
