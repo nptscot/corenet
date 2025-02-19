@@ -33,8 +33,7 @@ utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle
 #' NPT_demo_3km = sf::st_set_crs(NPT_demo_3km, 27700)
 #' base_network = sf::st_transform(os_edinburgh_demo_3km, crs = 27700)
 #' influence_network = sf::st_transform(NPT_demo_3km, crs = 27700)
-#' target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 2) |>
-#'                sf::st_transform(crs = "EPSG:27700")
+#' target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")        
 #'
 #' # Prepare the cohesive network
 #' OS_NPT_demo = cohesive_network_prep( base_network = base_network, 
@@ -46,7 +45,7 @@ utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle
 #'
 
 
-cohesive_network_prep = function(base_network, influence_network, target_zone, crs = "EPSG:27700",  key_attribute = "road_function", attribute_values = c("A Road", "B Road", "Minor Road"), use_stplanr = TRUE) {
+cohesive_network_prep = function(base_network, influence_network, target_zone, crs = "EPSG:27700",  key_attribute = "road_function", attribute_values = c("A Road", "B Road", "Minor Road"), use_stplanr = FALSE) {
     base_network = sf::st_transform(base_network, crs)    
     influence_network = sf::st_transform(influence_network, crs)
     target_zone = sf::st_transform(target_zone, crs)
@@ -62,35 +61,69 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
                         dplyr::filter(!!rlang::sym(key_attribute) %in% attribute_values ) |> 
                         sf::st_transform(crs) |> 
                         sf::st_zm()
-    if (use_stplanr) {
-      # Assign functions for data aggregation based on network attribute values 
-      name_list = names(NPT_zones)
+    # if (use_stplanr) {
+    #   # Assign functions for data aggregation based on network attribute values 
+    #   name_list = names(NPT_zones)
       
-      funs = list()
-      for (name in name_list) {
-        if (name == "geometry") {
-          next  # Correctly skip the current iteration if the name is "geometry"
-        } else if (name %in% c("gradient", "quietness")) {
-          funs[[name]] = mean  # Assign mean function for specified fields
-        } else {
-          funs[[name]] = mean  # Assign sum function for all other fields
-        }
-      }
+    #   funs = list()
+    #   for (name in name_list) {
+    #     if (name == "geometry") {
+    #       next  # Correctly skip the current iteration if the name is "geometry"
+    #     } else if (name %in% c("gradient", "quietness")) {
+    #       funs[[name]] = mean  # Assign mean function for specified fields
+    #     } else {
+    #       funs[[name]] = mean  # Assign sum function for all other fields
+    #     }
+    #   }
       
-      # Merge road networks with specified parameters
-      filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20, max_angle_diff = 10)
-    } else {
-      print("Using sf::st_join")
-      filtered_OS_NPT_zones = sf::st_join(filtered_OS_zones, NPT_zones, join = sf::st_intersects)
-    }
+    #   # Merge road networks with specified parameters
+    #   filtered_OS_NPT_zones = stplanr::rnet_merge(filtered_OS_zones, NPT_zones, dist = 10, funs = funs, segment_length = 20, max_angle_diff = 10)
+      
+    # } else {
+    #   print("Using sf::st_join")
+    #   filtered_OS_NPT_zones = sf::st_join(filtered_OS_zones, NPT_zones, join = sf::st_intersects)
+    # }
     
+    NPT_zones = sf::st_cast(NPT_zones, "LINESTRING")
+    filtered_OS_zones = sf::st_cast(filtered_OS_zones, "LINESTRING")
+    NPT_zones$id = 1:nrow(NPT_zones)
+    filtered_OS_zones$id = 1:nrow(filtered_OS_zones)
+
+    params = list(
+                  list(
+                    source = NPT_zones,
+                    target = filtered_OS_zones,
+                    attribute = "all_fastest_bicycle_go_dutch",
+                    new_name = "all_fastest_bicycle_go_dutch",
+                    agg_fun = sum,
+                    weights = c("target_weighted")
+                  )
+                )
+
+    results_list = purrr::map(params, function(p) {
+      anime_join(
+        source_data = p$source,
+        target_data = p$target,
+        attribute = p$attribute,
+        new_name = p$new_name,
+        agg_fun = p$agg_fun,
+        weights = p$weights,
+        angle_tolerance = 35,
+        distance_tolerance = 15
+      )
+    })
+
+
+    filtered_OS_NPT_zones = reduce(results_list, function(x, y) {
+      left_join(x, y, by = "id")
+    }, .init = filtered_OS_zones)
+
     filtered_OS_NPT_zones = filtered_OS_NPT_zones |>
                             dplyr::mutate(dplyr::across(dplyr::where(is.numeric), as.integer))
 
-
-  print("Finished preparing the network data")
-  
-  return(filtered_OS_NPT_zones)
+    print("Finished preparing the network data")
+    
+    return(filtered_OS_NPT_zones)
 }
 
 
@@ -160,9 +193,11 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
     # Perform DBSCAN clustering
     coordinates = sf::st_coordinates(centroids)
-    clusters = dbscan::dbscan(coordinates, eps = 18, minPts = 1)
-    centroids$cluster = clusters$cluster
-    unique_centroids = centroids[!duplicated(centroids$cluster), ]   
+    coordinates_clean = coordinates[complete.cases(coordinates), ]
+    clusters = dbscan::dbscan(coordinates_clean, eps = 18, minPts = 1)
+    centroids_clean = centroids[complete.cases(coordinates), ]
+    centroids_clean$cluster = clusters$cluster
+    unique_centroids = centroids_clean[!duplicated(centroids_clean$cluster), ]   
 
     # create a buffer of 10 meters around the cohesive_base_network
     cohesive_base_network_buffer = sf::st_buffer(cohesive_base_network, dist = 20)
