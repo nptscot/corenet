@@ -522,7 +522,7 @@ calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDi
             network, 
             from = point_geom, 
             to = sf::st_as_sfc(valid_centroids), 
-            weights = weights_to_use,
+            weights = "weight",
             type = path_type
         )
         

@@ -1,3 +1,4 @@
+#' @export
 # Define a helper function that runs anime and aggregates an attribute.
 anime_join = function(source_data,
                        target_data,
