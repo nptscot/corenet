@@ -11,7 +11,7 @@ cohesive_network_prep(
   crs = "EPSG:27700",
   key_attribute = "road_function",
   attribute_values = c("A Road", "B Road", "Minor Road"),
-  use_stplanr = TRUE
+  use_stplanr = FALSE
 )
 }
 \arguments{
@@ -50,8 +50,7 @@ os_edinburgh_demo_3km = sf::st_set_crs(os_edinburgh_demo_3km, 27700)
 NPT_demo_3km = sf::st_set_crs(NPT_demo_3km, 27700)
 base_network = sf::st_transform(os_edinburgh_demo_3km, crs = 27700)
 influence_network = sf::st_transform(NPT_demo_3km, crs = 27700)
-target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 2) |>
-               sf::st_transform(crs = "EPSG:27700")
+target_zone = zonebuilder::zb_zone("Edinburgh", n_circles = 3) |> sf::st_transform(crs = "EPSG:27700")        
 
 # Prepare the cohesive network
 OS_NPT_demo = cohesive_network_prep( base_network = base_network, 

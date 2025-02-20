@@ -15,7 +15,9 @@ corenet(
   minDistPts = 2,
   road_scores = list(`A Road` = 1, `B Road` = 1, `Minor Road` = 1000),
   n_removeDangles = 6,
-  penalty_value = 1
+  penalty_value = 1,
+  group_column = "name_1",
+  max_path_weight = 10
 )
 }
 \arguments{
@@ -40,6 +42,8 @@ corenet(
 \item{n_removeDangles}{Number of iterations to remove dangles from the network, default is 6.}
 
 \item{penalty_value}{The penalty value for roads with low values, default is 1.}
+
+\item{group_column}{The column name to group the network by edge betweenness, default is "name_1".}
 }
 \value{
 A spatial object representing the largest cohesive component of the network, free of dangles.

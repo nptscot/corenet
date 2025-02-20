@@ -98,7 +98,7 @@ OS_NPT_demo = cohesive_network_prep(base_network = os_edinburgh_demo_6km,
                                      crs = "EPSG:27700", 
                                      key_attribute = "road_function", 
                                      attribute_values = c("A Road", "B Road", "Minor Road"), use_stplanr = FALSE)
-# mapview::mapview(OS_NPT_demo, color = "blue") + mapview::mapview(NPT_demo_6km, color = "red")
+mapview::mapview(OS_NPT_demo, zcol = "all_fastest_bicycle_go_dutch")        
 ```
 ```{r}
 #rename NPT_MM_OSM$geom as NPT_MM_OSM$geometry

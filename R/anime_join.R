@@ -54,7 +54,13 @@ anime_join = function(
 ) {
   # Helper to display the name of the aggregation function
   get_fun_name = function(fn) {
-    deparse(substitute(fn))
+    # If the function is one of the standard ones, just return its name.
+    # Otherwise, you can fallback to something generic, e.g. "user-defined function".
+    if (identical(fn, sum)) return("sum")
+    if (identical(fn, mean)) return("mean")
+    if (identical(fn, max)) return("max")
+    # fallback
+    return("user-defined function")
   }
 
   # Let user know what's happening

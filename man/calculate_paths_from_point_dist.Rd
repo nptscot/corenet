@@ -10,7 +10,8 @@ calculate_paths_from_point_dist(
   minDistPts = 2,
   maxDistPts = 1500,
   centroids,
-  path_type = "shortest"
+  path_type = "shortest",
+  max_path_weight = 10
 )
 }
 \arguments{
@@ -24,10 +25,13 @@ calculate_paths_from_point_dist(
 
 \item{centroids}{An sf object containing centroids to which paths are calculated.}
 
-\item{path_type}{A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
-- 'shortest': Calculates the shortest path considering weights.
+\item{path_type}{A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.}
+
+\item{max_path_weight}{\itemize{
+\item 'shortest': Calculates the shortest path considering weights.
 - 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
-- 'all_simple': Calculates all simple paths, ignoring weights.}
+- 'all_simple': Calculates all simple paths, ignoring weights.
+}}
 }
 \value{
 An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
