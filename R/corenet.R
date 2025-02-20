@@ -178,7 +178,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #'                   road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000),n_removeDangles = 6,penalty_value = 1)
 #'
 
-corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000), n_removeDangles = 6 , penalty_value = 1, group_column = "name_1") {
+corenet = function(influence_network, cohesive_base_network, target_zone, key_attribute = "all_fastest_bicycle_go_dutch",  crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,minDistPts = 2, road_scores = list("A Road" = 1, "B Road" = 1, "Minor Road" = 1000), n_removeDangles = 6 , penalty_value = 1, group_column = "name_1", max_path_weight =10) {
 
   if (key_attribute %in% names(influence_network)) {
     paste0("Using ", key_attribute, " as indicator for the network")
@@ -325,7 +325,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
       function(n) {
-          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts, minDistPts = minDistPts)
+          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts, minDistPts = minDistPts, max_path_weight = max_path_weight)
       }
   )
 
