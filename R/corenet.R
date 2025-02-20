@@ -200,7 +200,7 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
     unique_centroids = centroids_clean[!duplicated(centroids_clean$cluster), ]   
 
     # create a buffer of 10 meters around the cohesive_base_network
-    cohesive_base_network_buffer = sf::st_buffer(cohesive_base_network, dist = 20)
+    cohesive_base_network_buffer = sf::st_buffer(cohesive_base_network, dist = 10)
 
     # filter unique_centroids by the buffer
     unique_centroids = sf::st_intersection(unique_centroids, cohesive_base_network_buffer)
@@ -479,13 +479,16 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @param minDistPts The minimum distance (in meters) to consider for path calculations.
 #' @param centroids An sf object containing centroids to which paths are calculated.
 #' @param path_type A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
+#' @param max_path_weight 
+#' 
 #'        - 'shortest': Calculates the shortest path considering weights.
 #'        - 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
 #'        - 'all_simple': Calculates all simple paths, ignoring weights.
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 #' @export
 
-calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDistPts = 1500, centroids, path_type = "shortest") {
+
+calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDistPts = 1500, centroids, path_type = "shortest", max_path_weight =10) {
     path_cache = list()
     
     # Ensure the network's CRS is correctly set for distance measurement in meters
@@ -526,10 +529,24 @@ calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDi
             type = path_type
         )
         
-        edges_in_paths = paths_from_point |>  
-            dplyr::pull(edge_paths) |> 
-            base::unlist() |> base::unique()
+        # edges_in_paths = paths_from_point |>  
+        #     dplyr::pull(edge_paths) |> 
+        #     base::unlist() |> base::unique()
 
+        # result = network |> dplyr::slice(unique(edges_in_paths)) |> sf::st_as_sf()
+        paths_from_point$total_weight = purrr::map_dbl(
+            paths_from_point$edge_paths,
+            ~ sum(network |> activate(edges) |> slice(.x) |> pull(weight))
+        )
+        
+        # Filter out paths exceeding weight threshold
+        valid_paths = paths_from_point[paths_from_point$total_weight <= max_path_weight, ]
+        
+        edges_in_paths = valid_paths |>  # CHANGED: Use filtered paths
+            dplyr::pull(edge_paths) |> 
+            base::unlist() |> 
+            base::unique()
+            
         result = network |> dplyr::slice(unique(edges_in_paths)) |> sf::st_as_sf()
     } else {
         result = NULL
@@ -539,7 +556,6 @@ calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDi
 
     return(result)
 }
-
 
 #' Calculate the largest connected component of a network
 #'
