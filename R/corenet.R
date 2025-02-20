@@ -487,74 +487,102 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
 #' @export
 
-
-calculate_paths_from_point_dist = function(network, point, minDistPts = 2, maxDistPts = 1500, centroids, path_type = "shortest", max_path_weight =10) {
-    path_cache = list()
-    
-    # Ensure the network's CRS is correctly set for distance measurement in meters
-    if (is.na(sf::st_crs(network)) || sf::st_crs(network)$units != "m") {
-        network = sf::st_transform(network, crs = 27700)  # Example: UTM zone 32N for meters
-    }
-
-    # Generate a unique key for the cache based on the point's coordinates
-    point_key = paste(sort(as.character(point)), collapse = "_")
-    if (exists("path_cache") && point_key %in% names(path_cache)) {
-        return(path_cache[[point_key]])
-    }
-
-    # Convert point and centroids to sfc if not already
-    point_geom = sf::st_as_sfc(point)
-    centroids_geom = sf::st_as_sfc(centroids)
-
-    # Calculate distances between point and centroids
-    distances = sf::st_distance(point_geom, centroids_geom)
-    distances_vector = as.vector(distances[1, ])
-    distances_vector = units::set_units(distances_vector, "m")
-
-    valid_centroids = centroids[
-      distances_vector >= units::set_units(minDistPts, "m") &
-      distances_vector <= units::set_units(maxDistPts, "m"),
-    ]
-
-    if (nrow(valid_centroids) > 0) {
-        # Define weights based on path_type
-        weights_to_use = if (path_type == "all_simple") NA else "weight"
-        
-        # Calculate paths based on specified path_type
-        paths_from_point = sfnetworks::st_network_paths(
-            network, 
-            from = point_geom, 
-            to = sf::st_as_sfc(valid_centroids), 
-            weights = "weight",
-            type = path_type
-        )
-        
-        # edges_in_paths = paths_from_point |>  
-        #     dplyr::pull(edge_paths) |> 
-        #     base::unlist() |> base::unique()
-
-        # result = network |> dplyr::slice(unique(edges_in_paths)) |> sf::st_as_sf()
-        paths_from_point$total_weight = purrr::map_dbl(
-            paths_from_point$edge_paths,
-            ~ sum(network |> activate(edges) |> slice(.x) |> pull(weight))
-        )
-        
-        # Filter out paths exceeding weight threshold
-        valid_paths = paths_from_point[paths_from_point$total_weight <= max_path_weight, ]
-        
-        edges_in_paths = valid_paths |>  # CHANGED: Use filtered paths
-            dplyr::pull(edge_paths) |> 
-            base::unlist() |> 
-            base::unique()
-            
-        result = network |> dplyr::slice(unique(edges_in_paths)) |> sf::st_as_sf()
-    } else {
-        result = NULL
-    }
-
-    path_cache[[point_key]] = result
-
-    return(result)
+calculate_paths_from_point_dist = function(
+  network,
+  point,
+  minDistPts = 2,
+  maxDistPts = 1500,
+  centroids,
+  path_type = "shortest",
+  max_path_weight = 10,
+  crs_transform = 27700
+) {
+  # 1) Ensure the network is in a meter-based CRS, transform if necessary
+  net_crs = sf::st_crs(network)
+  
+  # Check if units are in "m"; if missing or different, transform
+  if (is.na(net_crs) || (!is.null(net_crs$units) && net_crs$units != "m")) {
+    message("Transforming network to CRS: ", crs_transform)
+    network = sf::st_transform(network, crs = crs_transform)
+  }
+  
+  # 2) Generate a unique key for caching based on the point's coordinates
+  #    You can modify how this key is generated if your 'point' is already sf-compatible
+  point_key = paste(sort(as.character(point)), collapse = "_")
+  
+  # 3) Check if result is already cached
+  if (exists(point_key, envir = path_cache_env)) {
+    return(get(point_key, envir = path_cache_env))
+  }
+  
+  # 4) Convert the point and centroids to sfc if not already
+  point_geom     = sf::st_as_sfc(point)
+  centroids_geom = sf::st_as_sfc(centroids)
+  
+  # 5) Filter centroids by distance to the point
+  distances = sf::st_distance(point_geom, centroids_geom)
+  # distances is a 1 x n matrix; convert to a numeric vector (in meters)
+  distances_m = units::set_units(as.vector(distances[1, ]), "m")
+  
+  valid_idx = which(
+    distances_m >= units::set_units(minDistPts, "m") &
+      distances_m <= units::set_units(maxDistPts, "m")
+  )
+  
+  # If no centroids qualify, cache NULL and return
+  if (!length(valid_idx)) {
+    assign(point_key, NULL, envir = path_cache_env)
+    return(NULL)
+  }
+  
+  valid_centroids      = centroids[valid_idx, , drop = FALSE]
+  valid_centroids_geom = centroids_geom[valid_idx]
+  
+  # 6) Determine which weight column to use
+  #    If path_type == "all_simple", typically no weights are used.
+  #    Adjust as needed if your network uses a different attribute for cost/distance.
+  weights_to_use = if (path_type == "all_simple") NULL else "weight"
+  
+  # 7) Compute paths from the single point to all valid centroids
+  #    This returns indices of nodes/edges for each path
+  paths_from_point = sfnetworks::st_network_paths(
+    network,
+    from    = point_geom,
+    to      = valid_centroids_geom,
+    weights = weights_to_use, 
+    type    = path_type
+  )
+  
+  # 8) Summation of edge weights for each path
+  #    Instead of re-activating edges for each path, extract them once
+  net_edges        = network |> tidygraph::activate("edges")
+  edges_weight_vec = net_edges |> dplyr::pull(weight)
+  
+  # Vectorized summation of weights for each path
+  total_weights = sapply(paths_from_point$edge_paths, function(edge_ids) {
+    sum(edges_weight_vec[edge_ids], na.rm = TRUE)
+  })
+  
+  paths_from_point$total_weight = total_weights
+  
+  # 9) Filter out paths whose total weight exceeds threshold
+  valid_paths = paths_from_point[total_weights <= max_path_weight, ]
+  if (!nrow(valid_paths)) {
+    assign(point_key, NULL, envir = path_cache_env)
+    return(NULL)
+  }
+  
+  # 10) Collect the edges used by these filtered paths
+  edges_in_paths = unique(unlist(valid_paths$edge_paths))
+  
+  # 11) Slice the network edges to extract only those edges
+  result = net_edges |> 
+    dplyr::slice(edges_in_paths) |> 
+    sf::st_as_sf()
+  
+  # 12) Store in cache and return
+  assign(point_key, result, envir = path_cache_env)
+  return(result)
 }
 
 #' Calculate the largest connected component of a network
