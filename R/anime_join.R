@@ -128,5 +128,7 @@ anime_join = function(
     dplyr::left_join(net_target_aggregated, by = "row_number") |>
     dplyr::select(id, !!rlang::sym(new_name))
 
+  net_target_joined = net_target_joined[!duplicated(net_target_joined$id), ]
+
   return(net_target_joined)
 }
