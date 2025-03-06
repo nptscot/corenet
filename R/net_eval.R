@@ -196,73 +196,125 @@ compute_od_accessibility = function(od_data, rnet_core, lads, city_name = "City 
 
 ### Function: Compute Directness and Efficiency
 compute_directness_efficiency = function(rnet_core, lads, city_name = "City of Edinburgh") {
-  city_boundary  = lads |> filter(LAD23NM == city_name)
-  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary) |> st_cast("LINESTRING")
-
+  
+  # 1) Choose a planar coordinate system for distances in meters.
+  #    For Great Britain, EPSG:27700 is common.
+  target_crs = 27700
+  
+  # 2) Reproject boundary and network lines to the chosen CRS
+  lads_proj       = st_transform(lads, target_crs)
+  rnet_core_proj  = st_transform(rnet_core, target_crs)
+  
+  # 3) Clip the network to the chosen city
+  city_boundary   = lads_proj |> filter(LAD23NM == city_name)
+  rnet_core_zone  = st_intersection(rnet_core_proj, city_boundary)
+  rnet_core_zone  = st_cast(rnet_core_zone, "LINESTRING")  # ensure LINESTRING geometry
+  
+  # 4) Build an initial sfnetwork (UNDIRECTED)
   network_sfnet = as_sfnetwork(rnet_core_zone, directed = FALSE)
-  network_sfnet = network_sfnet |>
-    activate("edges") |>
-    mutate(weight = as.numeric(st_length(geometry))) 
   
-  g = network_sfnet |> as.igraph()
+  # 5) Subdivide lines at all intersections
+  #    This ensures real intersections become shared nodes
+  network_sfnet_subdiv = network_sfnet %>%
+    convert(to_spatial_subdivision) %>%
+    activate("edges") %>%
+    mutate(weight = st_length(geometry))  # edge weights in meters
   
-  comp = components(g)
-  largest_comp_id = which.max(comp$csize)
-  lcc_nodes = V(g)[comp$membership == largest_comp_id]
-  g_lcc = induced_subgraph(g, lcc_nodes)
+  # Convert to igraph for distance computations
+  g = as.igraph(network_sfnet_subdiv)
   
-  dist_matrix_g = distances(g_lcc, weights = E(g_lcc)$weight)
+  # 6) Compute distance matrices:
+  #    dist_matrix_g = shortest-path distances on the network
+  #    dist_matrix_e = straight-line (Euclidean) distances
+  dist_matrix_g = distances(g, weights = E(g)$weight)
   
-  nodes_sf = network_sfnet |>
-    activate("nodes") |>
+  # Extract node coordinates in the same planar CRS
+  nodes_sf = network_sfnet_subdiv %>%
+    activate("nodes") %>%
     st_as_sf()
   
   coords = st_coordinates(nodes_sf)
+  dist_matrix_e = as.matrix(dist(coords))
   
-  node_coords = nodes_sf |>
-    as.data.frame() |>
-    bind_cols(data.frame(x = coords[,1], y = coords[,2]))
+  # ------------------------------------------------------------------
+  # 7) Fraction-Weighted Directness & Global Efficiency
+  #
+  #    1) Among connected node pairs only
+  #    2) Multiply by the fraction of all node pairs that are connected
+  # ------------------------------------------------------------------
+  all_pairs_mask = upper.tri(dist_matrix_g, diag = FALSE)
   
-  node_coords_lcc = node_coords[as.numeric(lcc_nodes), ]
+  connected_mask = all_pairs_mask &
+                   is.finite(dist_matrix_g) &
+                   (dist_matrix_g > 0)
   
-  dist_matrix_e = as.matrix(dist(node_coords_lcc[, c("x","y")]))
+  # Fraction of connected pairs
+  n_all_pairs     = sum(all_pairs_mask)
+  n_conn_pairs    = sum(connected_mask)
+  frac_connected  = n_conn_pairs / n_all_pairs
   
-  valid_pairs = upper.tri(dist_matrix_g, diag = FALSE) & is.finite(dist_matrix_g) & dist_matrix_g > 0
+  # Directness among connected pairs
+  directness_ratios_conn = dist_matrix_e[connected_mask] / dist_matrix_g[connected_mask]
+  D_conn = mean(directness_ratios_conn, na.rm = TRUE)
   
-  # Directness
-  directness_ratios = dist_matrix_e[valid_pairs] / dist_matrix_g[valid_pairs]
-  D = mean(directness_ratios, na.rm = TRUE)
+  # Fraction-weighted Directness
+  D_fraction_weighted = D_conn * frac_connected
   
-  # Global Efficiency
-  sum_inv_dG = sum(1/dist_matrix_g[valid_pairs], na.rm = TRUE)
-  sum_inv_dE = sum(1/dist_matrix_e[valid_pairs], na.rm = TRUE)
-  E_glob = sum_inv_dG / sum_inv_dE
+  # Global Efficiency among connected pairs
+  E_glob_conn = sum(1 / dist_matrix_g[connected_mask], na.rm = TRUE) /
+                sum(1 / dist_matrix_e[connected_mask], na.rm = TRUE)
   
-  # Local Efficiency
-  calc_local_eff = function(node_id, distG, distE, g_graph) {
-    neighbors_idx = as.numeric(neighbors(g_graph, node_id))
-    if (length(neighbors_idx) < 2) {
+  # Fraction-weighted Global Efficiency
+  E_glob_fraction_weighted = E_glob_conn * frac_connected
+  
+  # ------------------------------------------------------------------
+  # 8) Local Efficiency
+  #
+  #    Standard approach: for each node's neighbors, ignore pairs that
+  #    aren't connected. If < 2 neighbors, local efficiency = NA.
+  # ------------------------------------------------------------------
+  calc_local_eff = function(node_id, distG, distE, igraph_obj) {
+    nbrs = as.numeric(neighbors(igraph_obj, node_id))
+    if (length(nbrs) < 2) {
       return(NA)
     }
-    distG_sub = distG[neighbors_idx, neighbors_idx]
-    distE_sub = distE[neighbors_idx, neighbors_idx]
-    valid_pairs_local = upper.tri(distG_sub, diag=FALSE) & is.finite(distG_sub) & distG_sub > 0
-    if (sum(valid_pairs_local) == 0) {
-      return(NA)
-    }
-    sum_inv_dG_sub = sum(1/distG_sub[valid_pairs_local], na.rm = TRUE)
-    sum_inv_dE_sub = sum(1/distE_sub[valid_pairs_local], na.rm = TRUE)
-    E_glob_i = sum_inv_dG_sub / sum_inv_dE_sub
-    return(E_glob_i)
+    distG_sub = distG[nbrs, nbrs]
+    distE_sub = distE[nbrs, nbrs]
+    
+    valid_sub = upper.tri(distG_sub, diag = FALSE) &
+                is.finite(distG_sub) &
+                (distG_sub > 0)
+    if (sum(valid_sub) == 0) return(NA)
+    
+    sum_invG = sum(1 / distG_sub[valid_sub], na.rm = TRUE)
+    sum_invE = sum(1 / distE_sub[valid_sub], na.rm = TRUE)
+    if (sum_invE == 0) return(NA)
+    
+    return(sum_invG / sum_invE)
   }
   
-  E_glob_i_values = sapply(seq_len(vcount(g_lcc)), function(i) calc_local_eff(i, dist_matrix_g, dist_matrix_e, g_lcc))
-  E_loc = mean(E_glob_i_values, na.rm = TRUE)
+  E_loc_values = sapply(seq_len(vcount(g)), function(i) {
+    calc_local_eff(i, dist_matrix_g, dist_matrix_e, g)
+  })
+  E_loc = mean(E_loc_values, na.rm = TRUE)
   
+  # ------------------------------------------------------------------
+  # 9) Return all metrics
+  # ------------------------------------------------------------------
   return(list(
-    D = D,
-    E_glob = E_glob,
-    E_loc = E_loc
+    # Fraction of connected pairs
+    frac_connected            = frac_connected,
+    
+    # Within-connected subgraphs only
+    D_conn                    = D_conn,         # directness among connected pairs
+    E_glob_conn               = E_glob_conn,    # global efficiency among connected pairs
+    
+    # Fraction-weighted directness & efficiency
+    D_fraction_weighted       = D_fraction_weighted,
+    E_glob_fraction_weighted  = E_glob_fraction_weighted,
+    
+    # Local Efficiency
+    E_loc                     = E_loc
   ))
 }
 
@@ -302,8 +354,8 @@ generate_radar_chart = function(city_name,
   
   # 6. Directness and Efficiency
   de_result = compute_directness_efficiency(rnet_core, lads, city_name = city_name)
-  directness = de_result$D
-  global_efficiency = de_result$E_glob
+  directness = de_result$D_fraction_weighted
+  global_efficiency = de_result$E_glob_fraction_weighted
   local_efficiency = de_result$E_loc
   print(paste("Directness: ", directness))
   # Combine metrics
