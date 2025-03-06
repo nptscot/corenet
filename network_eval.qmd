@@ -18,16 +18,16 @@ source("R/net_eval.R")
 ```
 
 ```{r}
-rnet_core = sf::st_read("network_eval_file/combined_CN_4_2024-12-01_OS.geojson")
+rnet_core = sf::st_read("network_eval_file/combined_CN_4_2024-12-01_OS.geojson") |> st_transform(27700)
 
 intermediate_zone = sf::st_read("network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg")
 intermediate_zone$geometry = intermediate_zone$geom
-mapview(intermediate_zone)
+
 od_data = readRDS("network_eval_file/od_izo_sf.Rds")
 
 lads = sf::read_sf("network_eval_file/la_regions_scotland_bfe_simplified_2023.geojson") |> st_transform(27700)
 
-rnet_npt = sf::st_read("network_eval_file/combined_network.gpkg") |> st_transform(27700)
+rnet_npt = sf::read_sf("network_eval_file/combined_network.gpkg") |> st_transform(27700)
 
 rnet_npt$geometry = rnet_npt$geom
 
@@ -53,9 +53,35 @@ for (city_name in city_names) {
     od_data = od_data,
     dist_threshold = 500,
     buffer_distance = 500,
-    save_path = glue::glue("./plot/", city_name , "_radar_chart.jpg")
+    save_path = glue::glue("./plot/", city_name , "_radar_chart_cbd_2.jpg")
   )
 }
-
 ```
 
+# evaluate the existing cycle network
+
+```{r}
+rnet_core_cohesive = sf::st_read("network_eval_file/combined_CN_4_2024-12-01_OS.geojson") |> st_transform(27700)
+
+rnet_core_scatter = sf::read_sf("cbd_layer_2025-02-01.geojson") |> dplyr::filter(!`Infrastructure type` %in% c("Mixed Traffic Street", "Shared Footway", "Off Road Cycleway"))|> st_transform(27700)
+#filter rnet_core by length 
+rnet_core_scatter = rnet_core_scatter |> 
+  dplyr::filter(st_length(geometry) > units::set_units(100, m))
+mapview(rnet_core_scatter, color = "red") + mapview(rnet_core_cohesive, color = "blue")
+
+metrics_scatter = compute_network_metrics(rnet_core = rnet_core_scatter, lads, "City of Edinburgh")
+
+# Inspect:
+metrics_scatter$D_fraction_weighted
+metrics_scatter$E_glob_fraction_weighted
+metrics_scatter$D_conn
+metrics_scatter$E_loc
+
+metrics_cohesive = compute_network_metrics(rnet_core_cohesive, lads, "City of Edinburgh")
+
+# Inspect:
+metrics_cohesive$D_fraction_weighted
+metrics_cohesive$E_glob_fraction_weighted
+metrics_cohesive$D_conn
+metrics_cohesive$E_loc
+```
