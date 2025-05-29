@@ -15,6 +15,7 @@ library(tidygraph)
 library(sfnetworks)
 library(units)
 source("R/net_eval.R")
+library(osmactive)
 ```
 
 ```{r}
@@ -57,5 +58,90 @@ for (city_name in city_names) {
   )
 }
 
+```
+
+```{r}
+rnet_core_zone_length = list()
+
+for (city_name in city_names[4]) {
+  city_boundary = lads |> filter(LAD23NM == city_name)
+  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
+  rnet_core_zone$length_m = as.numeric(st_length(rnet_core_zone))
+  total_length_m = sum(rnet_core_zone$length_m, na.rm = TRUE)
+  total_length_km = total_length_m / 1000
+  rnet_core_zone_length[[city_name]] = total_length_km
+}
+```
+
+```{r}
+city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
+
+# Initialize an empty list to store cycle networks for each city
+cycle_nets_list = list()
+
+# Loop through each city to create cycle networks
+for (i in seq_along(city_names)) {
+  city_name = city_names[i]
+  
+  cat("Processing", city_name, "...\n")
+  
+  # Get travel network for the city
+  osm = osmactive::get_travel_network("Scotland", boundary = lads[lads$LAD23NM == city_name, ], boundary_type = "clipsrc")
+  cycle_net = osmactive::get_cycling_network(osm)
+  drive_net = osmactive::get_driving_network(osm)
+  cycle_net = osmactive::distance_to_road(cycle_net, drive_net)
+  cycle_net = osmactive::classify_cycle_infrastructure(cycle_net) |> st_transform(27700)
+  
+  # Add city identifier to the cycle network
+  cycle_net$city = city_name
+  
+  # Store in list
+  cycle_nets_list[[i]] = cycle_net
+  
+  cat("Completed", city_name, "\n")
+}
+
+# Combine all cycle networks into a single sf object
+rnet_cycle = do.call(rbind, cycle_nets_list)
+
+# Display summary
+cat("Combined cycle network created with", nrow(rnet_cycle), "features across", length(city_names), "cities\n")
+
+# Optional: View the combined network
+mapview::mapview(rnet_cycle, zcol = "city")
+```
+
+```{r}
+# Generate radar charts using the combined cycle network
+for (city_name in city_names) {
+  generate_radar_chart(
+    city_name = city_name,
+    rnet_core = rnet_cycle,
+    lads = lads,
+    intermediate_zone = intermediate_zone,
+    rnet_npt = rnet_npt,
+    crs_target = crs_target,
+    od_data = od_data,
+    dist_threshold = 500,
+    buffer_distance = 500,
+    save_path = glue::glue("./plot/", city_name , "_radar_chart_existing_cycle.jpg")
+  )
+}
+```
+
+```{r}
+rnet_cycle_zone_length = list()
+
+for (city_name in city_names[4]) {
+  city_boundary = lads |> filter(LAD23NM == city_name)
+  intermediate_zone_city = intermediate_zone_city |> filter(LAD23NM == city_name)
+  rnet_cycle_zone = sf::st_intersection(rnet_cycle, city_boundary)
+  rnet_cycle_zone$length_m = as.numeric(st_length(rnet_cycle_zone))
+  total_length_m = sum(rnet_cycle_zone$length_m, na.rm = TRUE)
+  total_length_km = total_length_m / 1000
+  rnet_cycle_zone_length[[city_name]] = total_length_km
+}
+
+mapview(rnet_cycle_zone, color = "red") + mapview(rnet_core_zone, color = "blue") + mapview(intermediate_zone_city, zcol = "Name")
 ```
 
