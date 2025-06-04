@@ -19,11 +19,11 @@ library(osmactive)
 ```
 
 ```{r}
-rnet_core = sf::st_read("network_eval_file/combined_CN_4_2024-12-01_OS.geojson")
+rnet_core = sf::st_read("network_eval_file/combined_CN_4_2025-05-01_OS.geojson")
 
 intermediate_zone = sf::st_read("network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg")
 intermediate_zone$geometry = intermediate_zone$geom
-mapview(intermediate_zone)
+# mapview(intermediate_zone)
 od_data = readRDS("network_eval_file/od_izo_sf.Rds")
 
 lads = sf::read_sf("network_eval_file/la_regions_scotland_bfe_simplified_2023.geojson") |> st_transform(27700)
@@ -39,7 +39,13 @@ rnet_core = st_transform(rnet_core, crs = crs_target)
 intermediate_zone = st_transform(intermediate_zone, crs = crs_target)
 od_data = st_transform(od_data, crs = crs_target)
 lads = st_transform(lads, crs = crs_target)
+
+od_points = od_data |> 
+  st_cast("POINT")
+
+rnet_cycle = sf::st_read("network_eval_file/existing_cycle_network.gpkg")
 ```
+
 ```{r}
 city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
 
@@ -52,66 +58,17 @@ for (city_name in city_names) {
     rnet_npt = rnet_npt,
     crs_target = crs_target,
     od_data = od_data,
+    od_points = od_points,
     dist_threshold = 500,
     buffer_distance = 500,
     save_path = glue::glue("./plot/", city_name , "_radar_chart.jpg")
   )
-}
-
-```
-
-```{r}
-rnet_core_zone_length = list()
-
-for (city_name in city_names[4]) {
-  city_boundary = lads |> filter(LAD23NM == city_name)
-  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
-  rnet_core_zone$length_m = as.numeric(st_length(rnet_core_zone))
-  total_length_m = sum(rnet_core_zone$length_m, na.rm = TRUE)
-  total_length_km = total_length_m / 1000
-  rnet_core_zone_length[[city_name]] = total_length_km
 }
 ```
 
 ```{r}
 city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
 
-# Initialize an empty list to store cycle networks for each city
-cycle_nets_list = list()
-
-# Loop through each city to create cycle networks
-for (i in seq_along(city_names)) {
-  city_name = city_names[i]
-  
-  cat("Processing", city_name, "...\n")
-  
-  # Get travel network for the city
-  osm = osmactive::get_travel_network("Scotland", boundary = lads[lads$LAD23NM == city_name, ], boundary_type = "clipsrc")
-  cycle_net = osmactive::get_cycling_network(osm)
-  drive_net = osmactive::get_driving_network(osm)
-  cycle_net = osmactive::distance_to_road(cycle_net, drive_net)
-  cycle_net = osmactive::classify_cycle_infrastructure(cycle_net) |> st_transform(27700)
-  
-  # Add city identifier to the cycle network
-  cycle_net$city = city_name
-  
-  # Store in list
-  cycle_nets_list[[i]] = cycle_net
-  
-  cat("Completed", city_name, "\n")
-}
-
-# Combine all cycle networks into a single sf object
-rnet_cycle = do.call(rbind, cycle_nets_list)
-
-# Display summary
-cat("Combined cycle network created with", nrow(rnet_cycle), "features across", length(city_names), "cities\n")
-
-# Optional: View the combined network
-mapview::mapview(rnet_cycle, zcol = "city")
-```
-
-```{r}
 # Generate radar charts using the combined cycle network
 for (city_name in city_names) {
   generate_radar_chart(
@@ -122,6 +79,7 @@ for (city_name in city_names) {
     rnet_npt = rnet_npt,
     crs_target = crs_target,
     od_data = od_data,
+    od_points = od_points,
     dist_threshold = 500,
     buffer_distance = 500,
     save_path = glue::glue("./plot/", city_name , "_radar_chart_existing_cycle.jpg")
@@ -130,18 +88,114 @@ for (city_name in city_names) {
 ```
 
 ```{r}
-rnet_cycle_zone_length = list()
+# city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
 
-for (city_name in city_names[4]) {
-  city_boundary = lads |> filter(LAD23NM == city_name)
-  intermediate_zone_city = intermediate_zone_city |> filter(LAD23NM == city_name)
-  rnet_cycle_zone = sf::st_intersection(rnet_cycle, city_boundary)
-  rnet_cycle_zone$length_m = as.numeric(st_length(rnet_cycle_zone))
-  total_length_m = sum(rnet_cycle_zone$length_m, na.rm = TRUE)
-  total_length_km = total_length_m / 1000
-  rnet_cycle_zone_length[[city_name]] = total_length_km
-}
+# # Initialize an empty list to store cycle networks for each city
+# cycle_nets_list = list()
 
-mapview(rnet_cycle_zone, color = "red") + mapview(rnet_core_zone, color = "blue") + mapview(intermediate_zone_city, zcol = "Name")
+# # Loop through each city to create cycle networks
+# for (i in seq_along(city_names)) {
+#   city_name = city_names[i]
+  
+#   cat("Processing", city_name, "...\n")
+  
+#   # Get travel network for the city
+#   osm = osmactive::get_travel_network("Scotland", boundary = lads[lads$LAD23NM == city_name, ], boundary_type = "clipsrc")
+#   cycle_net = osmactive::get_cycling_network(osm)
+#   drive_net = osmactive::get_driving_network(osm)
+#   cycle_net = osmactive::distance_to_road(cycle_net, drive_net)
+#   cycle_net = osmactive::classify_cycle_infrastructure(cycle_net) |> st_transform(27700)
+  
+#   # Add city identifier to the cycle network
+#   cycle_net$city = city_name
+  
+#   # Store in list
+#   cycle_nets_list[[i]] = cycle_net
+  
+#   cat("Completed", city_name, "\n")
+# }
+
+# # Combine all cycle networks into a single sf object
+# rnet_cycle = do.call(rbind, cycle_nets_list)
+
+# # Display summary
+# cat("Combined cycle network created with", nrow(rnet_cycle), "features across", length(city_names), "cities\n")
+
+# # Optional: View the combined network
+# mapview::mapview(rnet_cycle, zcol = "city")
+
+# sf::st_write(rnet_cycle, "network_eval_file/existing_cycle_network.gpkg")
 ```
 
+
+## OD-Based Efficiency Analysis
+
+```{r}
+source("R/net_eval.R")
+# Test fair comparison between networks
+test_city = city_names[1]
+cat("Testing city:", test_city, "\n")
+city_boundary = lads |> filter(LAD23NM == test_city)
+od_points_city = od_points[city_boundary, ]
+rnet_core_city = rnet_core[city_boundary, ]
+rnet_cycle_city = rnet_cycle[city_boundary, ]
+mapview(city_boundary) + mapview(od_points_city) + mapview(rnet_core_city) + mapview(rnet_cycle_city)
+cat("=== TRULY Fair Network Comparison ===\n")
+cat("Key principle: Same OD points for all networks, unsuccessful routing = 0 efficiency\n\n")
+
+# Test with core network
+cat("--- Core Network ---\n")
+core_results = compute_directness_efficiency(rnet_core_city, od_points_city, lads, city_name = test_city)
+
+# Test with cycle network  
+cat("\n--- Cycle Network ---\n")
+cycle_results = compute_directness_efficiency(rnet_cycle_city, od_points_city, lads, city_name = test_city)
+
+# Compare results
+cat("\n=== Comparison Results ===\n")
+cat("SAME OD points used for both networks:", core_results$total_od_count, "\n")
+cat("SAME total pairs evaluated:", core_results$total_pairs, "\n\n")
+
+cat("Core Network:\n")
+cat("- Successfully routable pairs:", core_results$routable_pairs, "/", core_results$total_pairs,
+    "(", round(100 * core_results$routing_success_rate, 1), "%)\n")
+cat("- Directness (including 0s):", round(core_results$D, 4), "\n")
+cat("- Global Efficiency (including 0s):", round(core_results$E_glob, 4), "\n")
+cat("- Local Efficiency (including 0s):", round(core_results$E_loc, 4), "\n")
+
+cat("\nCycle Network:\n")
+cat("- Successfully routable pairs:", cycle_results$routable_pairs, "/", cycle_results$total_pairs,
+    "(", round(100 * cycle_results$routing_success_rate, 1), "%)\n")
+cat("- Directness (including 0s):", round(cycle_results$D, 4), "\n")
+cat("- Global Efficiency (including 0s):", round(cycle_results$E_glob, 4), "\n")
+cat("- Local Efficiency (including 0s):", round(cycle_results$E_loc, 4), "\n")
+
+cat("\n=== Interpretation ===\n")
+cat("Now the efficiency values are truly comparable because:\n")
+cat("1. Both networks evaluated on identical", core_results$total_pairs, "OD pairs\n")
+cat("2. Unsuccessful routing contributes 0 to efficiency (realistic penalty)\n")
+cat("3. Efficiency = (sum of all efficiency values) / total pairs\n")
+cat("4. Higher routing success rate + good efficiency = better overall performance\n")
+
+# Calculate relative performance
+cat("\n=== Relative Performance ===\n")
+if (core_results$D > cycle_results$D) {
+  cat("Core network has", round(core_results$D / cycle_results$D, 2), "x better directness\n")
+} else {
+  cat("Cycle network has", round(cycle_results$D / core_results$D, 2), "x better directness\n")
+}
+
+if (core_results$E_glob > cycle_results$E_glob) {
+  cat("Core network has", round(core_results$E_glob / cycle_results$E_glob, 2), "x better global efficiency\n")
+} else {
+  cat("Cycle network has", round(cycle_results$E_glob / core_results$E_glob, 2), "x better global efficiency\n")
+}
+
+if (core_results$E_loc > cycle_results$E_loc) {
+  cat("Core network has", round(core_results$E_loc / cycle_results$E_loc, 2), "x better local efficiency\n")
+} else {
+  cat("Cycle network has", round(cycle_results$E_loc / core_results$E_loc, 2), "x better local efficiency\n")
+}
+
+
+```
