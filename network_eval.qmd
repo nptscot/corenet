@@ -86,7 +86,7 @@ for (city_name in city_names) {
   )
 }
 ```
-
+Code to generate the existing cycle network (existing_cycle_network.gpkg)
 ```{r}
 # city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
 
