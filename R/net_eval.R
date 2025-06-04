@@ -35,7 +35,6 @@ compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City 
     dplyr::select(InterZone, geometry) |>
     sf::st_make_valid()
   
-  # Calculate buffer intersection for THIS specific network
   rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
   network_buffer = st_buffer(rnet_core_zone, dist = buffer_distance)
   buffer_union = st_union(network_buffer)
@@ -88,7 +87,7 @@ compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City 
     all_connected = (comp$no == 1),
     fraction_connected = fraction_connected,
     adj_matrix = adj_matrix,
-    buffered_area = W  # Return the buffered area for potential use by other functions
+    buffered_area = W  
   ))
 }
 
@@ -211,10 +210,8 @@ compute_directness_efficiency = function(rnet_core, od_points, lads, city_name =
     return(list(D = NA, E_glob = NA, E_loc = NA, total_od_count = nrow(od_points_zone), routable_pairs = 0, total_pairs = 0))
   }
 
-  # Create network
   network_sfnet = as_sfnetwork(rnet_core_zone, directed = FALSE)
   
-  # Calculate edge weights more robustly to avoid geometry issues
   edges_sf = network_sfnet |> activate("edges") |> st_as_sf()
   edge_lengths = as.numeric(st_length(edges_sf))
   
@@ -224,7 +221,6 @@ compute_directness_efficiency = function(rnet_core, od_points, lads, city_name =
   
   g = network_sfnet |> as.igraph()
   
-  # Get network nodes
   nodes_sf = network_sfnet |>
     activate("nodes") |>
     st_as_sf()
