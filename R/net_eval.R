@@ -23,7 +23,7 @@ compute_spatial_coverage = function(rnet_core, lads, city_name = "City of Edinbu
 }
 
 ### Function: Compute Zone Connectivity
-compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City of Edinburgh", buffer_intersection, density_quantile = 0.3) {
+compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City of Edinburgh", rnet_core, buffer_distance = 500, density_quantile = 0.3) {
   # Filter zones by density threshold
   city_boundary  = lads |> dplyr::filter(LAD23NM == city_name)
   intermediate_zone = sf::st_intersection(intermediate_zone, city_boundary)
@@ -35,8 +35,11 @@ compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City 
     dplyr::select(InterZone, geometry) |>
     sf::st_make_valid()
   
-  # W = B_union ∩ A_city (already computed outside)
-  W = buffer_intersection
+  # Calculate buffer intersection for THIS specific network
+  rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
+  network_buffer = st_buffer(rnet_core_zone, dist = buffer_distance)
+  buffer_union = st_union(network_buffer)
+  W = sf::st_intersection(buffer_union, city_boundary)
   
   # Compute intersections W_i
   zones = zones |>
@@ -84,7 +87,8 @@ compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City 
     graph = g,
     all_connected = (comp$no == 1),
     fraction_connected = fraction_connected,
-    adj_matrix = adj_matrix
+    adj_matrix = adj_matrix,
+    buffered_area = W  # Return the buffered area for potential use by other functions
   ))
 }
 
@@ -194,81 +198,208 @@ compute_od_accessibility = function(od_data, rnet_core, lads, city_name = "City 
   ))
 }
 
-### Function: Compute Directness and Efficiency
-compute_directness_efficiency = function(rnet_core, lads, city_name = "City of Edinburgh") {
-  city_boundary  = lads |> filter(LAD23NM == city_name)
+### Function: Compute OD-Based Directness and Efficiency
+compute_directness_efficiency = function(rnet_core, od_points, lads, city_name = "City of Edinburgh", use_all_od_points = TRUE) {
+  city_boundary = lads |> filter(LAD23NM == city_name)
   rnet_core_zone = sf::st_intersection(rnet_core, city_boundary) |> st_cast("LINESTRING")
+  od_points_zone = od_points[city_boundary, ]
 
+  cat("Network edges:", nrow(rnet_core_zone), "Total OD points:", nrow(od_points_zone), "\n")
+  
+  # Check if we have data
+  if (nrow(rnet_core_zone) == 0 || nrow(od_points_zone) == 0) {
+    return(list(D = NA, E_glob = NA, E_loc = NA, total_od_count = nrow(od_points_zone), routable_pairs = 0, total_pairs = 0))
+  }
+
+  # Create network
   network_sfnet = as_sfnetwork(rnet_core_zone, directed = FALSE)
+  
+  # Calculate edge weights more robustly to avoid geometry issues
+  edges_sf = network_sfnet |> activate("edges") |> st_as_sf()
+  edge_lengths = as.numeric(st_length(edges_sf))
+  
   network_sfnet = network_sfnet |>
     activate("edges") |>
-    mutate(weight = as.numeric(st_length(geometry))) 
+    mutate(weight = edge_lengths)
   
   g = network_sfnet |> as.igraph()
   
-  comp = components(g)
-  largest_comp_id = which.max(comp$csize)
-  lcc_nodes = V(g)[comp$membership == largest_comp_id]
-  g_lcc = induced_subgraph(g, lcc_nodes)
-  
-  dist_matrix_g = distances(g_lcc, weights = E(g_lcc)$weight)
-  
+  # Get network nodes
   nodes_sf = network_sfnet |>
     activate("nodes") |>
     st_as_sf()
   
-  coords = st_coordinates(nodes_sf)
+  # Use ALL OD points for fair comparison across networks
+  # This ensures same denominator for all network comparisons
+  od_points_filtered = od_points_zone
+  n_od = nrow(od_points_filtered)
   
-  node_coords = nodes_sf |>
-    as.data.frame() |>
-    bind_cols(data.frame(x = coords[,1], y = coords[,2]))
+  cat("Using ALL", n_od, "OD points for fair comparison across networks\n")
   
-  node_coords_lcc = node_coords[as.numeric(lcc_nodes), ]
+  # Find nearest network nodes for all OD points
+  od_nearest_nodes = st_nearest_feature(od_points_filtered, nodes_sf)
   
-  dist_matrix_e = as.matrix(dist(node_coords_lcc[, c("x","y")]))
+  # Create OD pairs (all combinations of OD points)
+  od_coords = st_coordinates(od_points_filtered)
   
-  valid_pairs = upper.tri(dist_matrix_g, diag = FALSE) & is.finite(dist_matrix_g) & dist_matrix_g > 0
-  
-  # Directness
-  directness_ratios = dist_matrix_e[valid_pairs] / dist_matrix_g[valid_pairs]
-  D = mean(directness_ratios, na.rm = TRUE)
-  
-  # Global Efficiency
-  sum_inv_dG = sum(1/dist_matrix_g[valid_pairs], na.rm = TRUE)
-  sum_inv_dE = sum(1/dist_matrix_e[valid_pairs], na.rm = TRUE)
-  E_glob = sum_inv_dG / sum_inv_dE
-  
-  # Local Efficiency
-  calc_local_eff = function(node_id, distG, distE, g_graph) {
-    neighbors_idx = as.numeric(neighbors(g_graph, node_id))
-    if (length(neighbors_idx) < 2) {
-      return(NA)
-    }
-    distG_sub = distG[neighbors_idx, neighbors_idx]
-    distE_sub = distE[neighbors_idx, neighbors_idx]
-    valid_pairs_local = upper.tri(distG_sub, diag=FALSE) & is.finite(distG_sub) & distG_sub > 0
-    if (sum(valid_pairs_local) == 0) {
-      return(NA)
-    }
-    sum_inv_dG_sub = sum(1/distG_sub[valid_pairs_local], na.rm = TRUE)
-    sum_inv_dE_sub = sum(1/distE_sub[valid_pairs_local], na.rm = TRUE)
-    E_glob_i = sum_inv_dG_sub / sum_inv_dE_sub
-    return(E_glob_i)
+  # Sample OD pairs to make computation manageable
+  max_pairs = 10000  # Limit to prevent excessive computation
+  if (n_od > sqrt(max_pairs)) {
+    sample_size = min(n_od, as.integer(sqrt(max_pairs)))
+    sampled_indices = sample(1:n_od, sample_size)
+    od_coords_sample = od_coords[sampled_indices, ]
+    od_nearest_nodes_sample = od_nearest_nodes[sampled_indices]
+    od_weights_sample = od_points_filtered$all[sampled_indices]
+  } else {
+    od_coords_sample = od_coords
+    od_nearest_nodes_sample = od_nearest_nodes
+    od_weights_sample = od_points_filtered$all
   }
   
-  E_glob_i_values = sapply(seq_len(vcount(g_lcc)), function(i) calc_local_eff(i, dist_matrix_g, dist_matrix_e, g_lcc))
-  E_loc = mean(E_glob_i_values, na.rm = TRUE)
+  n_sample = nrow(od_coords_sample)
+  
+  # Create all pairs from sampled OD points
+  od_pairs = expand.grid(origin = 1:n_sample, destination = 1:n_sample)
+  od_pairs = od_pairs[od_pairs$origin != od_pairs$destination, ]  # Remove same-point pairs
+  
+  total_pairs = nrow(od_pairs)
+  cat("Processing", total_pairs, "OD pairs from", n_sample, "sampled OD points\n")
+  
+  # Calculate euclidean distances for OD pairs
+  origin_coords = od_coords_sample[od_pairs$origin, ]
+  dest_coords = od_coords_sample[od_pairs$destination, ]
+  od_euclidean_dist = sqrt(rowSums((origin_coords - dest_coords)^2))
+  
+  # Calculate network distances for OD pairs
+  origin_nodes = od_nearest_nodes_sample[od_pairs$origin]
+  dest_nodes = od_nearest_nodes_sample[od_pairs$destination]
+  
+  od_network_dist = numeric(length(origin_nodes))
+  
+  for (i in seq_along(origin_nodes)) {
+    if (origin_nodes[i] != dest_nodes[i]) {
+      tryCatch({
+        path_dist = distances(g, v = origin_nodes[i], to = dest_nodes[i], weights = E(g)$weight)
+        od_network_dist[i] = path_dist[1, 1]
+      }, error = function(e) {
+        od_network_dist[i] = Inf
+      })
+    } else {
+      od_network_dist[i] = 0
+    }
+  }
+  
+  # Count successful routing attempts
+  routable_pairs = sum(is.finite(od_network_dist) & od_euclidean_dist > 0 & od_network_dist > 0)
+  cat("Successfully routable pairs:", routable_pairs, "out of", total_pairs, 
+      "(", round(100 * routable_pairs / total_pairs, 1), "%)\n")
+  
+  # Calculate metrics for ALL pairs (assign 0 efficiency to unsuccessful ones)
+  # Get weights for all pairs (average of origin and destination weights)
+  origin_weights = od_weights_sample[od_pairs$origin]
+  dest_weights = od_weights_sample[od_pairs$destination]
+  pair_weights = (origin_weights + dest_weights) / 2
+  
+  # Initialize efficiency vectors with zeros
+  directness_values = numeric(total_pairs)
+  global_efficiency_values = numeric(total_pairs)
+  
+  # Calculate values only for valid pairs
+  valid_pairs = is.finite(od_network_dist) & od_euclidean_dist > 0 & od_network_dist > 0
+  
+  if (sum(valid_pairs) > 0) {
+    # OD-based Directness
+    directness_values[valid_pairs] = od_euclidean_dist[valid_pairs] / od_network_dist[valid_pairs]
+    
+    # OD-based Global Efficiency
+    global_efficiency_values[valid_pairs] = (od_network_dist[valid_pairs]) / (od_euclidean_dist[valid_pairs])
+  }
+  
+  # Calculate weighted averages (unsuccessful pairs contribute 0)
+  D = weighted.mean(directness_values, pair_weights, na.rm = TRUE)
+  E_glob = weighted.mean(global_efficiency_values, pair_weights, na.rm = TRUE)
+  
+  # OD-based Local Efficiency
+  # For each OD point, calculate efficiency within its local neighborhood
+  calc_local_eff_od = function(od_idx, od_coords_sample, od_nearest_nodes_sample, od_weights_sample, g, radius = 2000) {
+    center_coord = od_coords_sample[od_idx, ]
+    
+    # Find OD points within radius
+    distances_to_center = sqrt(rowSums((sweep(od_coords_sample, 2, center_coord))^2))
+    local_indices = which(distances_to_center <= radius & distances_to_center > 0)
+    
+    if (length(local_indices) < 2) {
+      return(0)  # Return 0 instead of NA for fair comparison
+    }
+    
+    # Calculate efficiency within local area
+    local_coords = od_coords_sample[local_indices, ]
+    local_nodes = od_nearest_nodes_sample[local_indices]
+    local_weights = od_weights_sample[local_indices]
+    
+    # Create pairs within local area
+    n_local = length(local_indices)
+    local_pairs = expand.grid(1:n_local, 1:n_local)
+    local_pairs = local_pairs[local_pairs$Var1 != local_pairs$Var2, ]
+    
+    if (nrow(local_pairs) == 0) {
+      return(0)  # Return 0 instead of NA
+    }
+    
+    # Calculate distances for local pairs
+    local_euc = sqrt(rowSums((local_coords[local_pairs$Var1, ] - local_coords[local_pairs$Var2, ])^2))
+    
+    local_net = numeric(nrow(local_pairs))
+    for (i in 1:nrow(local_pairs)) {
+      node1 = local_nodes[local_pairs$Var1[i]]
+      node2 = local_nodes[local_pairs$Var2[i]]
+      if (node1 != node2) {
+        tryCatch({
+          path_dist = distances(g, v = node1, to = node2, weights = E(g)$weight)
+          local_net[i] = path_dist[1, 1]
+        }, error = function(e) {
+          local_net[i] = Inf
+        })
+      } else {
+        local_net[i] = 0
+      }
+    }
+    
+    # Calculate efficiency for ALL local pairs (assign 0 to unsuccessful ones)
+    local_efficiency_values = numeric(nrow(local_pairs))
+    valid_local = is.finite(local_net) & local_euc > 0 & local_net > 0
+    
+    if (sum(valid_local) > 0) {
+      local_efficiency_values[valid_local] = (1/local_net[valid_local]) / (1/local_euc[valid_local])
+    }
+    
+    # Calculate weighted average (unsuccessful pairs contribute 0)
+    local_weights_pairs = (local_weights[local_pairs$Var1] + local_weights[local_pairs$Var2]) / 2
+    
+    return(weighted.mean(local_efficiency_values, local_weights_pairs, na.rm = TRUE))
+  }
+  
+  # Calculate local efficiency for each OD point
+  E_loc_values = sapply(1:n_sample, function(i) {
+    calc_local_eff_od(i, od_coords_sample, od_nearest_nodes_sample, od_weights_sample, g)
+  })
+  
+  E_loc = mean(E_loc_values, na.rm = TRUE)
   
   return(list(
     D = D,
     E_glob = E_glob,
-    E_loc = E_loc
+    E_loc = E_loc,
+    total_od_count = nrow(od_points_zone),
+    routable_pairs = routable_pairs,
+    total_pairs = total_pairs,
+    routing_success_rate = routable_pairs / total_pairs
   ))
 }
 
 generate_radar_chart = function(city_name, 
                                 rnet_core, lads, intermediate_zone, 
-                                rnet_npt, crs_target, od_data, 
+                                rnet_npt, crs_target, od_data, od_points,
                                 dist_threshold = 500, buffer_distance = 500, 
                                 save_path = NULL) {
   
@@ -281,7 +412,7 @@ generate_radar_chart = function(city_name,
   spatial_coverage = sp_cov_result$coverage * 100  # Convert to percentage
   print(paste("Spatial coverage: ", spatial_coverage, "%"))
   # 2. Zone Connectivity
-  zone_conn_result = compute_zone_connectivity(intermediate_zone, lads, city_name = city_name, sp_cov_result$buffered_area)
+  zone_conn_result = compute_zone_connectivity(intermediate_zone, lads, city_name = city_name, rnet_core, buffer_distance = buffer_distance)
   zone_connectivity = zone_conn_result$fraction_connected * 100
   print(paste("Zone connectivity: ", zone_connectivity, "%"))
   
@@ -302,12 +433,15 @@ generate_radar_chart = function(city_name,
   od_coverage_demand = od_result$od_coverage_demand * 100
   print(paste("OD coverage (count-based): ", od_coverage_count, "%"))
   
-  # 6. Directness and Efficiency
-  de_result = compute_directness_efficiency(rnet_core, lads, city_name = city_name)
+  # 6. OD-Based Directness and Efficiency
+  de_result = compute_directness_efficiency(rnet_core, od_points, lads, city_name = city_name)
   directness = de_result$D
   global_efficiency = de_result$E_glob
   local_efficiency = de_result$E_loc
-  print(paste("Directness: ", directness))
+  print(paste("OD-based Directness: ", directness))
+  print(paste("OD-based Global Efficiency: ", global_efficiency))
+  print(paste("OD-based Local Efficiency: ", local_efficiency))
+  
   # Combine metrics
   df_metrics_numeric <- data.frame(
     SpatialCoverage          = spatial_coverage,
@@ -333,9 +467,9 @@ generate_radar_chart = function(city_name,
     AvgODDistance            = df_metrics_numeric$AvgODDistance / 1000,
     ODCoverageCountBased     = df_metrics_numeric$ODCoverageCountBased / 100,
     ODCoverageDemandWeighted = df_metrics_numeric$ODCoverageDemandWeighted / 100,
-    Directness               = df_metrics_numeric$Directness,
-    GlobalEfficiency         = df_metrics_numeric$GlobalEfficiency,
-    LocalEfficiency          = df_metrics_numeric$LocalEfficiency
+    Directness               = df_metrics_numeric$Directness * 10,
+    GlobalEfficiency         = df_metrics_numeric$GlobalEfficiency * 10,
+    LocalEfficiency          = df_metrics_numeric$LocalEfficiency * 10
   )
   
   # Prepare radar chart data
@@ -358,9 +492,9 @@ generate_radar_chart = function(city_name,
     "Avg.\nOD\nDistance",
     "OD\nCoverage\n(Count)",
     "OD\nCoverage\n(Demand)",
-    "Directness",
-    "Global\nEfficiency",
-    "Local\nEfficiency"
+    "OD-based\nDirectness",
+    "OD-based\nGlobal\nEfficiency",
+    "OD-based\nLocal\nEfficiency"
   )
   
   # Generate radar chart
