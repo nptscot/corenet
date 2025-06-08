@@ -238,8 +238,23 @@ compute_directness_efficiency = function(rnet_core, od_points, lads, city_name =
   # Create OD pairs (all combinations of OD points)
   od_coords = st_coordinates(od_points_filtered)
   
+  # Calculate city area to scale the number of OD pairs
+  city_area_km2 = as.numeric(st_area(city_boundary)) / 1e6  # Convert to km²
+  cat("City area:", round(city_area_km2, 1), "km²\n")
+  
+  # Scale max_pairs based on city area
+  # Base: 10,000 pairs for ~200 km² city (roughly the size of a medium city)
+  # Scale proportionally with city area
+  base_area_km2 = 200
+  base_max_pairs = 10000
+  max_pairs = max(5000, min(50000, round(base_max_pairs * (city_area_km2 / base_area_km2))))
+  
+  cat("Scaled max pairs for this city size:", max_pairs, "\n")
+  
   # Sample OD pairs to make computation manageable
-  max_pairs = 10000  # Limit to prevent excessive computation
+  # Use city name as seed to ensure same sampling within same city for fair network comparison
+  set.seed(abs(sum(utf8ToInt(city_name))))  # Reproducible seed based on city name
+  
   if (n_od > sqrt(max_pairs)) {
     sample_size = min(n_od, as.integer(sqrt(max_pairs)))
     sampled_indices = sample(1:n_od, sample_size)
@@ -260,6 +275,8 @@ compute_directness_efficiency = function(rnet_core, od_points, lads, city_name =
   
   total_pairs = nrow(od_pairs)
   cat("Processing", total_pairs, "OD pairs from", n_sample, "sampled OD points\n")
+  cat("City area-based scaling: area =", round(city_area_km2, 1), "km², max_pairs =", max_pairs, "\n")
+  cat("Using city-based seed for reproducible sampling within", city_name, "\n")
   
   # Calculate euclidean distances for OD pairs
   origin_coords = od_coords_sample[od_pairs$origin, ]
@@ -389,91 +406,134 @@ compute_directness_efficiency = function(rnet_core, od_points, lads, city_name =
     total_od_count = nrow(od_points_zone),
     routable_pairs = routable_pairs,
     total_pairs = total_pairs,
-    routing_success_rate = routable_pairs / total_pairs
+    routing_success_rate = routable_pairs / total_pairs,
+    city_area_km2 = city_area_km2,
+    max_pairs_used = max_pairs
   ))
 }
 
 generate_radar_chart = function(city_name, 
-                                rnet_core, lads, intermediate_zone, 
+                                rnet_core, rnet_existing, lads, intermediate_zone, 
                                 rnet_npt, crs_target, od_data, od_points,
                                 dist_threshold = 500, buffer_distance = 500, 
                                 save_path = NULL) {
   
   library(fmsb)
   
-  # 1. Spatial Coverage
-  sp_cov_result = compute_spatial_coverage(rnet_core, lads, city_name = city_name, buffer_distance = buffer_distance)
-  spatial_coverage = sp_cov_result$coverage * 100  # Convert to percentage
-  print(paste("Spatial coverage: ", spatial_coverage, "%"))
-  # 2. Zone Connectivity
-  zone_conn_result = compute_zone_connectivity(intermediate_zone, lads, city_name = city_name, rnet_core, buffer_distance = buffer_distance)
-  zone_connectivity = zone_conn_result$fraction_connected * 100
-  print(paste("Zone connectivity: ", zone_connectivity, "%"))
+  cat("Generating dual-network radar chart for", city_name, "\n")
   
-  # 3. Cycling Potential Coverage
-  cp_cov_result = compute_cycling_potential_coverage(rnet_npt, lads, city_name = city_name, rnet_core, crs_target)
-  cycling_potential_coverage = cp_cov_result$coverage * 100
-  citywide_density_ratio = cp_cov_result$coverage_ratio  # Might need different scaling if > 1
-  print(paste("Cycling potential coverage: ", cycling_potential_coverage, "%"))
+  # Helper function to calculate all metrics for a given network
+  calculate_network_metrics = function(rnet, network_name) {
+    cat("  Calculating metrics for", network_name, "network...\n")
+    
+    # 1. Spatial Coverage
+    sp_cov_result = compute_spatial_coverage(rnet, lads, city_name = city_name, buffer_distance = buffer_distance)
+    spatial_coverage = sp_cov_result$coverage * 100
+    
+    # 2. Zone Connectivity
+    zone_conn_result = compute_zone_connectivity(intermediate_zone, lads, city_name = city_name, rnet, buffer_distance = buffer_distance)
+    zone_connectivity = zone_conn_result$fraction_connected * 100
+    
+    # 3. Cycling Potential Coverage
+    cp_cov_result = compute_cycling_potential_coverage(rnet_npt, lads, city_name = city_name, rnet, crs_target)
+    cycling_potential_coverage = cp_cov_result$coverage * 100
+    citywide_density_ratio = cp_cov_result$coverage_ratio
+    
+    # 4. Population Coverage
+    pop_cov = compute_population_coverage(intermediate_zone, lads, city_name = city_name, rnet, dist_threshold = dist_threshold)
+    population_coverage = pop_cov * 100
+    
+    # 5. O-D Accessibility
+    od_result = compute_od_accessibility(od_data, rnet, lads, city_name = city_name, dist_threshold = dist_threshold)
+    od_coverage_count = od_result$od_coverage_count * 100
+    od_coverage_demand = od_result$od_coverage_demand * 100
+    
+    # 6. OD-Based Directness and Efficiency
+    de_result = compute_directness_efficiency(rnet, od_points, lads, city_name = city_name)
+    directness = de_result$D
+    global_efficiency = de_result$E_glob
+    local_efficiency = de_result$E_loc
+    routable_pairs_pct = (de_result$routable_pairs / de_result$total_pairs) * 100
+    
+    # Return all metrics
+    return(data.frame(
+      SpatialCoverage          = spatial_coverage,
+      ZoneConnectivity         = zone_connectivity,
+      CyclingPotentialCoverage = cycling_potential_coverage,
+      CitywideDensityRatio     = citywide_density_ratio,
+      PopulationCoverage       = population_coverage,
+      AvgODDistance            = od_result$avg_distance,
+      ODCoverageCountBased     = od_coverage_count,
+      ODCoverageDemandWeighted = od_coverage_demand,
+      RoutablePairs            = routable_pairs_pct,
+      Directness               = directness,
+      GlobalEfficiency         = global_efficiency,
+      LocalEfficiency          = local_efficiency
+    ))
+  }
   
-  # 4. Population Coverage
-  pop_cov = compute_population_coverage(intermediate_zone, lads, city_name = city_name, rnet_core, dist_threshold = dist_threshold)
-  population_coverage = pop_cov * 100
-  print(paste("Population coverage: ", population_coverage, "%"))
+  # Calculate metrics for both networks
+  core_metrics = calculate_network_metrics(rnet_core, "core")
+  existing_metrics = calculate_network_metrics(rnet_existing, "existing")
   
-  # 5. O-D Accessibility
-  od_result = compute_od_accessibility(od_data, rnet_core, lads, city_name = city_name, dist_threshold = dist_threshold)
-  od_coverage_count = od_result$od_coverage_count * 100
-  od_coverage_demand = od_result$od_coverage_demand * 100
-  print(paste("OD coverage (count-based): ", od_coverage_count, "%"))
+  # Calculate relative performance ratios
+  directness_ratio = ifelse(existing_metrics$Directness > 0, 
+                           core_metrics$Directness / existing_metrics$Directness, 
+                           NA)
+  global_eff_ratio = ifelse(existing_metrics$GlobalEfficiency > 0, 
+                           core_metrics$GlobalEfficiency / existing_metrics$GlobalEfficiency, 
+                           NA)
+  local_eff_ratio = ifelse(existing_metrics$LocalEfficiency > 0, 
+                          core_metrics$LocalEfficiency / existing_metrics$LocalEfficiency, 
+                          NA)
+  routable_pairs_ratio = ifelse(existing_metrics$RoutablePairs > 0,
+                               core_metrics$RoutablePairs / existing_metrics$RoutablePairs,
+                               NA)
   
-  # 6. OD-Based Directness and Efficiency
-  de_result = compute_directness_efficiency(rnet_core, od_points, lads, city_name = city_name)
-  directness = de_result$D
-  global_efficiency = de_result$E_glob
-  local_efficiency = de_result$E_loc
-  print(paste("OD-based Directness: ", directness))
-  print(paste("OD-based Global Efficiency: ", global_efficiency))
-  print(paste("OD-based Local Efficiency: ", local_efficiency))
+  # Print comparison
+  cat("  Core network metrics:\n")
+  cat("    Spatial Coverage:", round(core_metrics$SpatialCoverage, 1), "%\n")
+  cat("    Routable Pairs:", round(core_metrics$RoutablePairs, 1), "%\n")
+  cat("    Directness:", round(core_metrics$Directness, 4), "\n")
+  cat("    Global Efficiency:", round(core_metrics$GlobalEfficiency, 4), "\n")
   
-  # Combine metrics
-  df_metrics_numeric <- data.frame(
-    SpatialCoverage          = spatial_coverage,
-    ZoneConnectivity         = zone_connectivity,
-    CyclingPotentialCoverage = cycling_potential_coverage,
-    CitywideDensityRatio     = citywide_density_ratio,
-    PopulationCoverage       = population_coverage,
-    AvgODDistance            = od_result$avg_distance,
-    ODCoverageCountBased     = od_coverage_count,
-    ODCoverageDemandWeighted = od_coverage_demand,
-    Directness               = directness,
-    GlobalEfficiency         = global_efficiency,
-    LocalEfficiency          = local_efficiency
-  )
+  cat("  Existing network metrics:\n")
+  cat("    Spatial Coverage:", round(existing_metrics$SpatialCoverage, 1), "%\n")
+  cat("    Routable Pairs:", round(existing_metrics$RoutablePairs, 1), "%\n")
+  cat("    Directness:", round(existing_metrics$Directness, 4), "\n")
+  cat("    Global Efficiency:", round(existing_metrics$GlobalEfficiency, 4), "\n")
   
-  # Scale metrics for radar chart
-  df_metrics_scaled = data.frame(
-    SpatialCoverage          = df_metrics_numeric$SpatialCoverage / 100,
-    ZoneConnectivity         = df_metrics_numeric$ZoneConnectivity / 100,
-    CyclingPotentialCoverage = df_metrics_numeric$CyclingPotentialCoverage / 100,
-    CitywideDensityRatio     = df_metrics_numeric$CitywideDensityRatio / 5,
-    PopulationCoverage       = df_metrics_numeric$PopulationCoverage / 100,
-    AvgODDistance            = df_metrics_numeric$AvgODDistance / 1000,
-    ODCoverageCountBased     = df_metrics_numeric$ODCoverageCountBased / 100,
-    ODCoverageDemandWeighted = df_metrics_numeric$ODCoverageDemandWeighted / 100,
-    Directness               = df_metrics_numeric$Directness * 10,
-    GlobalEfficiency         = df_metrics_numeric$GlobalEfficiency * 10,
-    LocalEfficiency          = df_metrics_numeric$LocalEfficiency * 10
-  )
+  # Scale metrics for radar chart (excluding efficiency metrics and routable pairs)
+  scale_metrics = function(df_metrics) {
+    # Scale and invert Average O-D Distance so that lower distances (better) result in higher values
+    scaled_distance = df_metrics$AvgODDistance / 1000  # Convert to km
+    inverted_distance = 1 - pmin(scaled_distance, 1)   # Invert and cap at 1 to avoid negative values
+    
+    data.frame(
+      SpatialCoverage          = df_metrics$SpatialCoverage / 100,
+      ZoneConnectivity         = df_metrics$ZoneConnectivity / 100,
+      CyclingPotentialCoverage = df_metrics$CyclingPotentialCoverage / 100,
+      CitywideDensityRatio     = df_metrics$CitywideDensityRatio / 5,
+      PopulationCoverage       = df_metrics$PopulationCoverage / 100,
+      AvgODDistance            = inverted_distance,
+      ODCoverageCountBased     = df_metrics$ODCoverageCountBased / 100,
+      ODCoverageDemandWeighted = df_metrics$ODCoverageDemandWeighted / 100
+    )
+  }
   
-  # Prepare radar chart data
-  max_vals = rep(1, ncol(df_metrics_scaled))
-  min_vals = rep(0, ncol(df_metrics_scaled))
+  core_scaled = scale_metrics(core_metrics)
+  cycle_scaled = scale_metrics(existing_metrics)
   
+  # Prepare radar chart data with max/min bounds
+  max_vals = rep(1, ncol(core_scaled))
+  min_vals = rep(0, ncol(core_scaled))
+  
+  # Combine data for radar chart (max, min, core, cycle)
   df_radar = rbind(
     max_vals,
     min_vals,
-    df_metrics_scaled
+    core_scaled,
+    cycle_scaled
   )
   
   # Rename columns for radar chart
@@ -483,41 +543,112 @@ generate_radar_chart = function(city_name,
     "Cycling Potential\nCoverage",
     "Density\nRatio",
     "Pop.\nCoverage",
-    "Avg.\nOD\nDistance",
+    "OD\nAccessibility",
     "OD\nCoverage\n(Count)",
-    "OD\nCoverage\n(Demand)",
-    "OD-based\nDirectness",
-    "OD-based\nGlobal\nEfficiency",
-    "OD-based\nLocal\nEfficiency"
+    "OD\nCoverage\n(Demand)"
   )
   
   # Generate radar chart
   if (!is.null(save_path)) {
-    # Open a PNG device to save the plot
-    png(filename = save_path, width = 800, height = 800)
+    png(filename = save_path, width = 1200, height = 900)
   }
 
+  # Create the radar chart with both networks
   radarchart(
     df_radar,
     axistype = 1,
     seg = 5,
-    pcol  = rgb(0.2, 0.5, 0.5, 0.9),
-    pfcol = rgb(0.2, 0.5, 0.5, 0.5),
-    plwd  = 2,
+    # Core network in red, cycle network in blue
+    pcol = c("red", "blue"),
+    pfcol = c(rgb(1, 0, 0, 0.3), rgb(0, 0, 1, 0.3)),  # Semi-transparent fills
+    plwd = 3,
     cglcol = "grey",
     cglty = 1,
     axislabcol = "grey",
-    caxislabels = seq(0, max(max_vals), length.out = 6),
-    title = paste(city_name),
-    # Increase font sizes
-    cex.axis = 2,    # Axis label size
-    cex.lab = 2,     # Axis title size (if applicable)
-    cex.main = 2,       # Main title size
-    vlcex = 1.5
+    caxislabels = seq(0, 1, length.out = 6),
+    title = paste(city_name, "- Core (Red) vs Cycle (Blue) Networks"),
+    cex.axis = 1.2,
+    cex.main = 1.5,
+    vlcex = 1.2
   )
   
-  if (!is.null(save_path)) {
-    dev.off()  # Close the PNG device
+  # Add legend
+  legend(
+    x = "topright",
+    legend = c("Core Network", "Cycle Network"),
+    col = c("red", "blue"),
+    lty = 1:2,
+    bty = "n"
+  )
+  
+  # Create performance comparison dataframe
+  performance_data = data.frame(
+    Metric = character(),
+    Core_Value = numeric(),
+    Existing_Value = numeric(),
+    Ratio = numeric(),
+    Performance_Text = character(),
+    stringsAsFactors = FALSE
+  )
+  
+  if (!is.na(directness_ratio)) {
+    performance_data = rbind(performance_data, data.frame(
+      Metric = "Directness",
+      Core_Value = core_metrics$Directness,
+      Existing_Value = existing_metrics$Directness,
+      Ratio = directness_ratio,
+      Performance_Text = paste("Core network has", round(directness_ratio, 2), "x better directness")
+    ))
   }
+  
+  if (!is.na(global_eff_ratio)) {
+    performance_data = rbind(performance_data, data.frame(
+      Metric = "Global_Efficiency",
+      Core_Value = core_metrics$GlobalEfficiency,
+      Existing_Value = existing_metrics$GlobalEfficiency,
+      Ratio = global_eff_ratio,
+      Performance_Text = paste("Core network has", round(global_eff_ratio, 2), "x better global efficiency")
+    ))
+  }
+  
+  if (!is.na(local_eff_ratio)) {
+    performance_data = rbind(performance_data, data.frame(
+      Metric = "Local_Efficiency",
+      Core_Value = core_metrics$LocalEfficiency,
+      Existing_Value = existing_metrics$LocalEfficiency,
+      Ratio = local_eff_ratio,
+      Performance_Text = paste("Core network has", round(local_eff_ratio, 2), "x better local efficiency")
+    ))
+  }
+  
+  if (!is.na(routable_pairs_ratio)) {
+    performance_data = rbind(performance_data, data.frame(
+      Metric = "Routable_Pairs",
+      Core_Value = core_metrics$RoutablePairs,
+      Existing_Value = existing_metrics$RoutablePairs,
+      Ratio = routable_pairs_ratio,
+      Performance_Text = paste("Core network has", round(routable_pairs_ratio, 2), "x better routable pairs")
+    ))
+  }
+  
+  if (!is.null(save_path)) {
+    dev.off()
+    cat("  Saved radar chart to:", save_path, "\n")
+  }
+  
+  # Print performance comparison text
+  cat("  Performance Comparisons:\n")
+  for (i in 1:nrow(performance_data)) {
+    cat("   ", performance_data$Performance_Text[i], "\n")
+  }
+  
+  # Return both sets of metrics and performance comparison dataframe
+  return(list(
+    core_metrics = core_metrics,
+    existing_metrics = existing_metrics,
+    core_scaled = core_scaled,
+    cycle_scaled = cycle_scaled,
+    performance_comparison = performance_data
+  ))
 }
 
