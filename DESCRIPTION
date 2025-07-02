@@ -37,7 +37,8 @@ Suggests:
     rsgeo,
     fmsb
 Remotes: 
-    josiahparry/anime
+    josiahparry/anime,
+    josiahparry/rsgeo
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
