@@ -2,7 +2,12 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr", "group_column"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr", "group_column",
+                         # Variables from net_eval.R functions
+                         "geometry", "InterZone", "TotPop2011", "StdAreaKm2", "ResPop2011", "W_i", 
+                         "has_intersection", "covered_area", "covered_area_km2", "pop_density", 
+                         "covered_population", "distance_to_network", "all", "length_m", "km",
+                         "target_id", "id"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -146,6 +151,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
 #' @param penalty_value The penalty value for roads with low values, default is 1.
 #' @param group_column The column name to group the network by edge betweenness, default is "name_1".
+#' @param max_path_weight Maximum weight allowed for paths in network calculations, default is 10.
 #' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
 #' @examples
@@ -193,9 +199,9 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
     # Perform DBSCAN clustering
     coordinates = sf::st_coordinates(centroids)
-    coordinates_clean = coordinates[complete.cases(coordinates), ]
+    coordinates_clean = coordinates[stats::complete.cases(coordinates), ]
     clusters = dbscan::dbscan(coordinates_clean, eps = 18, minPts = 1)
-    centroids_clean = centroids[complete.cases(coordinates), ]
+    centroids_clean = centroids[stats::complete.cases(coordinates), ]
     centroids_clean$cluster = clusters$cluster
     unique_centroids = centroids_clean[!duplicated(centroids_clean$cluster), ]   
 
@@ -479,8 +485,10 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @param minDistPts The minimum distance (in meters) to consider for path calculations.
 #' @param centroids An sf object containing centroids to which paths are calculated.
 #' @param path_type A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
-#' @param max_path_weight 
+#' @param max_path_weight Maximum weight allowed for paths in network calculations.
+#' @param crs_transform The coordinate reference system to transform to, default is 27700 (British National Grid).
 #' 
+#' @return A list containing the computed paths and their associated weights.
 #'        - 'shortest': Calculates the shortest path considering weights.
 #'        - 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
 #'        - 'all_simple': Calculates all simple paths, ignoring weights.

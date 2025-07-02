@@ -1,18 +1,18 @@
 ### Function: Compute Spatial Coverage
 compute_spatial_coverage = function(rnet_core, lads, city_name = "City of Edinburgh", buffer_distance = 500) {
 
-  city_boundary  = lads |> filter(LAD23NM == city_name)
+  city_boundary  = lads |> dplyr::filter(LAD23NM == city_name)
   rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
   # Create a buffer around the network
-  network_buffer = st_buffer(rnet_core_zone, dist = buffer_distance)
+  network_buffer = sf::st_buffer(rnet_core_zone, dist = buffer_distance)
   # Union all buffer polygons
-  buffer_union = st_union(network_buffer)
+  buffer_union = sf::st_union(network_buffer)
   # Intersect with city boundary
   buffer_intersection = sf::st_intersection(buffer_union, city_boundary)
   
   # Compute areas
-  area_buffered = st_area(buffer_intersection)
-  area_city = st_area(city_boundary)
+  area_buffered = sf::st_area(buffer_intersection)
+  area_city = sf::st_area(city_boundary)
   
   # Spatial coverage ratio
   spatial_coverage = as.numeric(area_buffered / area_city)
@@ -25,24 +25,24 @@ compute_spatial_coverage = function(rnet_core, lads, city_name = "City of Edinbu
 ### Function: Compute Zone Connectivity
 compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City of Edinburgh", buffer_intersection, density_quantile = 0.3) {
   # Filter zones by density threshold
-  city_boundary  = lads |> filter(LAD23NM == city_name)
+  city_boundary  = lads |> dplyr::filter(LAD23NM == city_name)
   intermediate_zone = sf::st_intersection(intermediate_zone, city_boundary)
   intermediate_zone$density = intermediate_zone$ResPop2011 / intermediate_zone$StdAreaKm2
-  density_threshold = quantile(intermediate_zone$density, density_quantile, na.rm = TRUE)
-  intermediate_zone = intermediate_zone |> filter(density > density_threshold)
+  density_threshold = stats::quantile(intermediate_zone$density, density_quantile, na.rm = TRUE)
+  intermediate_zone = intermediate_zone |> dplyr::filter(density > density_threshold)
   
   zones = intermediate_zone |>
-    select(InterZone, geometry) |>
-    st_make_valid()
+    dplyr::select(InterZone, geometry) |>
+    sf::st_make_valid()
   
   # W = B_union ∩ A_city (already computed outside)
   W = buffer_intersection
   
   # Compute intersections W_i
   zones = zones |>
-    rowwise() |>
-    mutate(W_i = list(st_intersection(geometry, W))) |>
-    ungroup()
+    dplyr::rowwise() |>
+    dplyr::mutate(W_i = list(sf::st_intersection(geometry, W))) |>
+    dplyr::ungroup()
   
   # Check intersections
   zones = zones |> mutate(has_intersection = lengths(W_i) > 0)
@@ -61,8 +61,8 @@ compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City 
         geom_i = zones$W_i[[i]]
         geom_j = zones$W_i[[j]]
         
-        intersects = st_intersects(geom_i, geom_j, sparse = FALSE)
-        touches = st_touches(geom_i, geom_j, sparse = FALSE)
+        intersects = sf::st_intersects(geom_i, geom_j, sparse = FALSE)
+        touches = sf::st_touches(geom_i, geom_j, sparse = FALSE)
         
         if (any(intersects) | any(touches)) {
           adj_matrix[i, j] = 1
@@ -75,10 +75,10 @@ compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City 
   all_connected = all(adj_matrix == 1)
   cat("Are all zones inter-connected within W? ", all_connected, "\n")
 
-  g = graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
-  comp = components(g)
+  g = igraph::graph_from_adjacency_matrix(adj_matrix, mode = "undirected")
+  comp = igraph::components(g)
   largest_comp_size = max(comp$csize)
-  total_zones = length(V(g))
+  total_zones = length(igraph::V(g))
   fraction_connected = largest_comp_size / total_zones
   return(list(
     graph = g,
@@ -92,13 +92,13 @@ compute_zone_connectivity = function(intermediate_zone, lads, city_name = "City 
 compute_cycling_potential_coverage = function(rnet_npt, lads, city_name = "City of Edinburgh", rnet_core, crs_target, buffer_distance = 20) {
   
   # Filter city network to within the city boundary
-  city_boundary  = lads |> filter(LAD23NM == city_name)
+  city_boundary  = lads |> dplyr::filter(LAD23NM == city_name)
   rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
   rnet_city = sf::st_intersection(rnet_npt, city_boundary)
   
   # Compute length of each segment
   rnet_city = rnet_city |>
-    mutate(length_m = as.numeric(st_length(geometry))) 
+    dplyr::mutate(length_m = as.numeric(sf::st_length(geometry))) 
   
   # Total city potential (sum of all_fastest_bicycle_go_dutch)
   P_total = sum(rnet_city$all_fastest_bicycle_go_dutch, na.rm = TRUE)
@@ -110,10 +110,10 @@ compute_cycling_potential_coverage = function(rnet_npt, lads, city_name = "City 
   D_city = P_total / L_city
   
   # Create a buffer around the core network
-  rnet_core_buffer = st_buffer(rnet_core_zone, buffer_distance)
+  rnet_core_buffer = sf::st_buffer(rnet_core_zone, buffer_distance)
   
   # Extract segments within the buffer
-  rnet_city_buffer = rnet_city[st_union(rnet_core_buffer), , op = st_within]
+  rnet_city_buffer = rnet_city[sf::st_union(rnet_core_buffer), , op = sf::st_within]
   
   # Buffered potential sum
   P_U_city = sum(rnet_city_buffer$all_fastest_bicycle_go_dutch, na.rm = TRUE)
@@ -139,24 +139,24 @@ compute_cycling_potential_coverage = function(rnet_npt, lads, city_name = "City 
 
 ### Function: Compute Population Coverage
 compute_population_coverage = function(intermediate_zone, lads, city_name = "City of Edinburgh", rnet_core, dist_threshold = 500) {
-  city_boundary  = lads |> filter(LAD23NM == city_name)
+  city_boundary  = lads |> dplyr::filter(LAD23NM == city_name)
   intermediate_zone = sf::st_intersection(intermediate_zone, city_boundary)
   rnet_core_zone = sf::st_intersection(rnet_core, city_boundary)
 
   zones = intermediate_zone |>
-    select(InterZone, TotPop2011, StdAreaKm2, geometry) |>
-    st_make_valid() |>
-    mutate(pop_density = TotPop2011 / StdAreaKm2)
+    dplyr::select(InterZone, TotPop2011, StdAreaKm2, geometry) |>
+    sf::st_make_valid() |>
+    dplyr::mutate(pop_density = TotPop2011 / StdAreaKm2)
   
-  rnet_core_buffer = st_buffer(rnet_core_zone, dist_threshold)
-  W = st_intersection(st_union(rnet_core_buffer), city_boundary)
+  rnet_core_buffer = sf::st_buffer(rnet_core_zone, dist_threshold)
+  W = sf::st_intersection(sf::st_union(rnet_core_buffer), city_boundary)
   
-  zones_coverage = st_intersection(zones, W)
-  zones_coverage$covered_area = st_area(zones_coverage)
+  zones_coverage = sf::st_intersection(zones, W)
+  zones_coverage$covered_area = sf::st_area(zones_coverage)
   zones_coverage$covered_area_km2 = units::set_units(zones_coverage$covered_area, km^2)
   
   zones_coverage = zones_coverage |>
-    mutate(covered_population = pop_density * as.numeric(covered_area_km2))
+    dplyr::mutate(covered_population = pop_density * as.numeric(covered_area_km2))
   
   P_covered = sum(zones_coverage$covered_population, na.rm = TRUE)
   P_total = sum(zones$TotPop2011, na.rm = TRUE)
@@ -272,7 +272,9 @@ generate_radar_chart = function(city_name,
                                 dist_threshold = 500, buffer_distance = 500, 
                                 save_path = NULL) {
   
-  library(fmsb)
+  if (!requireNamespace("fmsb", quietly = TRUE)) {
+    stop("Package 'fmsb' is required for this function. Please install it with install.packages('fmsb')")
+  }
   
   # 1. Spatial Coverage
   sp_cov_result = compute_spatial_coverage(rnet_core, lads, city_name = city_name, buffer_distance = buffer_distance)
@@ -364,15 +366,15 @@ generate_radar_chart = function(city_name,
   # Generate radar chart
   if (!is.null(save_path)) {
     # Open a PNG device to save the plot
-    png(filename = save_path, width = 800, height = 800)
+    grDevices::png(filename = save_path, width = 800, height = 800)
   }
 
-  radarchart(
+  fmsb::radarchart(
     df_radar,
     axistype = 1,
     seg = 5,
-    pcol  = rgb(0.2, 0.5, 0.5, 0.9),
-    pfcol = rgb(0.2, 0.5, 0.5, 0.5),
+    pcol  = grDevices::rgb(0.2, 0.5, 0.5, 0.9),
+    pfcol = grDevices::rgb(0.2, 0.5, 0.5, 0.5),
     plwd  = 2,
     cglcol = "grey",
     cglty = 1,
@@ -387,7 +389,7 @@ generate_radar_chart = function(city_name,
   )
   
   if (!is.null(save_path)) {
-    dev.off()  # Close the PNG device
+    grDevices::dev.off()  # Close the PNG device
   }
 }
 
