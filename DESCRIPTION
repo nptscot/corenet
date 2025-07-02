@@ -37,7 +37,7 @@ Suggests:
     rsgeo,
     fmsb
 Remotes: 
-    josiahparry/anime,
+    josiahparry/anime/r,
     josiahparry/rsgeo
 Encoding: UTF-8
 LazyData: true
