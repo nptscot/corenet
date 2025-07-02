@@ -9,6 +9,8 @@ Authors@R: c(
   )
 Author: Zhao Wang [aut, cre], Robin Lovelace [aut, ctb]
 Maintainer: Zhao Wang <wangzhao0217@gmail.com>
+Author: Zhao Wang [aut, cre], Robin Lovelace [aut, ctb]
+Maintainer: Zhao Wang <wangzhao0217@gmail.com>
 Description: This package provides functions to generate 'core' transport networks from
     'complete' transport network datasets. It can take a transport network from
     'OpenStreetMap' and saved as an 'sf' object via 'osmextract' or other package
