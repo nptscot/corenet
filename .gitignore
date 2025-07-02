@@ -6,3 +6,6 @@ Test.Rmd
 Test.R
 cohesive_network_region_boundary.geojson
 inputdata/
+plot/
+network_eval_file/
+..Rcheck/
