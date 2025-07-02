@@ -239,11 +239,11 @@ compute_directness_efficiency = function(rnet_core, od_points, lads, city_name =
   od_coords = st_coordinates(od_points_filtered)
   
   # Calculate city area to scale the number of OD pairs
-  city_area_km2 = as.numeric(st_area(city_boundary)) / 1e6  # Convert to km²
-  cat("City area:", round(city_area_km2, 1), "km²\n")
+  city_area_km2 = as.numeric(st_area(city_boundary)) / 1e6  # Convert to km^2
+  cat("City area:", round(city_area_km2, 1), "km^2\n")
   
   # Scale max_pairs based on city area
-  # Base: 10,000 pairs for ~200 km² city (roughly the size of a medium city)
+  # Base: 10,000 pairs for ~200 km^2 city (roughly the size of a medium city)
   # Scale proportionally with city area
   base_area_km2 = 200
   base_max_pairs = 10000
@@ -275,7 +275,7 @@ compute_directness_efficiency = function(rnet_core, od_points, lads, city_name =
   
   total_pairs = nrow(od_pairs)
   cat("Processing", total_pairs, "OD pairs from", n_sample, "sampled OD points\n")
-  cat("City area-based scaling: area =", round(city_area_km2, 1), "km², max_pairs =", max_pairs, "\n")
+  cat("City area-based scaling: area =", round(city_area_km2, 1), "km^2, max_pairs =", max_pairs, "\n")
   cat("Using city-based seed for reproducible sampling within", city_name, "\n")
   
   # Calculate euclidean distances for OD pairs
