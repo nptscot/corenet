@@ -27,11 +27,18 @@ Imports:
     purrr,
     units,
     rlang,
+    anime,
+    stats,
+    grDevices
 Suggests: 
     tibble,
     tmaptools,
     zonebuilder,
-    rsgeo
+    rsgeo,
+    fmsb
+Remotes: 
+    josiahparry/anime/r,
+    josiahparry/rsgeo
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
