@@ -506,16 +506,7 @@ calculate_paths_from_point_dist = function(
     network = sf::st_transform(network, crs = crs_transform)
   }
   
-  # 2) Generate a unique key for caching based on the point's coordinates
-  #    You can modify how this key is generated if your 'point' is already sf-compatible
-  point_key = paste(sort(as.character(point)), collapse = "_")
-  
-  # 3) Check if result is already cached
-  if (exists(point_key, envir = path_cache_env)) {
-    return(get(point_key, envir = path_cache_env))
-  }
-  
-  # 4) Convert the point and centroids to sfc if not already
+  # 2) Convert the point and centroids to sfc if not already
   point_geom     = sf::st_as_sfc(point)
   centroids_geom = sf::st_as_sfc(centroids)
   
@@ -529,9 +520,8 @@ calculate_paths_from_point_dist = function(
       distances_m <= units::set_units(maxDistPts, "m")
   )
   
-  # If no centroids qualify, cache NULL and return
+  # If no centroids qualify, return NULL
   if (!length(valid_idx)) {
-    assign(point_key, NULL, envir = path_cache_env)
     return(NULL)
   }
   
@@ -568,7 +558,6 @@ calculate_paths_from_point_dist = function(
   # 9) Filter out paths whose total weight exceeds threshold
   valid_paths = paths_from_point[total_weights <= max_path_weight, ]
   if (!nrow(valid_paths)) {
-    assign(point_key, NULL, envir = path_cache_env)
     return(NULL)
   }
   
@@ -580,8 +569,7 @@ calculate_paths_from_point_dist = function(
     dplyr::slice(edges_in_paths) |> 
     sf::st_as_sf()
   
-  # 12) Store in cache and return
-  assign(point_key, result, envir = path_cache_env)
+  # 12) Return the result
   return(result)
 }
 
