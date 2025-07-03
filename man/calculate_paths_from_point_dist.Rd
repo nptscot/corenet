@@ -34,9 +34,6 @@ calculate_paths_from_point_dist(
 }
 \value{
 A list containing the computed paths and their associated weights.
-- 'shortest': Calculates the shortest path considering weights.
-- 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
-- 'all_simple': Calculates all simple paths, ignoring weights.
 }
 \description{
 This function determines the network paths from a specific point to multiple centroids based on distance thresholds.
