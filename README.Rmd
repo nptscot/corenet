@@ -109,7 +109,7 @@ CN_network_old = corenet(NPT_demo_6km, OS_NPT_demo, target_zone,
                       crs = "EPSG:27700", npt_threshold = 1500, maxDistPts = 1500,
                       road_scores = list("A Road" = 1, "B Road" = 2, "Minor Road" = 100), penalty_value = 1)    
 })
-mapview::mapview(CN_network, color = "blue")
+mapview::mapview(CN_network_old, color = "blue")
 CN_network_old = CN_network
 ```
 

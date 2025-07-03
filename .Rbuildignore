@@ -8,3 +8,9 @@
 zip
 gpkg
 ^Doc$
+^\.devcontainer$
+^code$
+^network_eval\.qmd$
+^network_eval_file$
+^plot$
+^requirements\.txt$

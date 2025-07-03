@@ -15,15 +15,77 @@ library(tidygraph)
 library(sfnetworks)
 library(units)
 source("R/net_eval.R")
+library(osmactive)
 ```
 
 ```{r}
-rnet_core = sf::st_read("network_eval_file/combined_CN_4_2024-12-01_OS.geojson")
+check_and_download_file <- function(file_path, download_url, description = "file") {
+  if (!file.exists(file_path)) {
+    cat("File", file_path, "does not exist. Downloading", description, "...\n")
+    
+    dir.create(dirname(file_path), recursive = TRUE, showWarnings = FALSE)
+    
+    tryCatch({
+      download.file(download_url, file_path, mode = "wb")
+      cat("Successfully downloaded", description, "to", file_path, "\n")
+    }, error = function(e) {
+      stop("Failed to download ", description, ": ", e$message)
+    })
+  } else {
+    cat("File", file_path, "already exists. Using existing file.\n")
+  }
+}
+
+base_url <- "https://github.com/nptscot/corenet/releases/download/net_eval/"
+
+files_to_check <- list(
+  list(
+    path = "network_eval_file/combined_CN_4_2025-05-01_OS.geojson",
+    url = paste0(base_url, "combined_CN_4_2025-05-01_OS.geojson"),
+    description = "Core Network GeoJSON"
+  ),
+  list(
+    path = "network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg",
+    url = paste0(base_url, "SG_IntermediateZone_Bdry_2011.gpkg"),
+    description = "Intermediate Zone Boundaries"
+  ),
+  list(
+    path = "network_eval_file/combined_od_commute_subset_2025-05-01.Rds",
+    url = paste0(base_url, "od_izo_sf.Rds"),
+    description = "OD Data"
+  ),
+  list(
+    path = "network_eval_file/la_regions_scotland_bfe_simplified_2023.geojson",
+    url = paste0(base_url, "la_regions_scotland_bfe_simplified_2023.geojson"),
+    description = "Local Authority Boundaries"
+  ),
+  list(
+    path = "network_eval_file/combined_network.gpkg",
+    url = paste0(base_url, "combined_network.gpkg"),
+    description = "NPT Combined Network"
+  ),
+  list(
+    path = "network_eval_file/existing_cycle_network.gpkg",
+    url = paste0(base_url, "existing_cycle_network.gpkg"),
+    description = "Existing Cycle Network"
+  )
+)
+
+# Check and download all required files
+for (file_info in files_to_check) {
+  check_and_download_file(file_info$path, file_info$url, file_info$description)
+}
+```
+
+```{r}
+# Now read the files (they should exist at this point)
+rnet_core = sf::st_read("network_eval_file/combined_CN_4_2025-05-01_OS.geojson")
 
 intermediate_zone = sf::st_read("network_eval_file/SG_IntermediateZone_Bdry_2011.gpkg")
 intermediate_zone$geometry = intermediate_zone$geom
-mapview(intermediate_zone)
-od_data = readRDS("network_eval_file/od_izo_sf.Rds")
+# mapview(intermediate_zone)
+od_data = readRDS("network_eval_file/combined_od_commute_subset_2025-05-01.Rds")
+dim(od_data)
 
 lads = sf::read_sf("network_eval_file/la_regions_scotland_bfe_simplified_2023.geojson") |> st_transform(27700)
 
@@ -38,24 +100,336 @@ rnet_core = st_transform(rnet_core, crs = crs_target)
 intermediate_zone = st_transform(intermediate_zone, crs = crs_target)
 od_data = st_transform(od_data, crs = crs_target)
 lads = st_transform(lads, crs = crs_target)
+
+od_points = od_data |> 
+  st_cast("POINT")
+
+rnet_existing = sf::st_read("network_eval_file/existing_cycle_network.gpkg")
 ```
+
+## Compare original vs jittered OD data for Edinburgh
+
+```{r}
+cat("Loading ready jittered OD dataset...\n")
+
+od_data_original = readRDS("network_eval_file/od_izo_sf.Rds") |> st_cast("POINT") |> st_transform(27700)
+od_jittered = readRDS("network_eval_file/od_commute_subset.Rds") |> st_cast("POINT") |> st_transform(27700)
+
+edinburgh_city = "City of Edinburgh"
+
+city_boundary = lads |> filter(LAD23NM == edinburgh_city)
+
+od_data_original_city = od_data_original[city_boundary, ]
+od_jittered_city = od_jittered[city_boundary, ]
+
+cat("Original OD data dimensions:", nrow(od_data_original_city), "rows,", ncol(od_data_original_city), "columns\n")
+cat("Jittered OD data dimensions:", nrow(od_jittered_city), "rows,", ncol(od_jittered_city), "columns\n")
+
+mapview(od_data_original_city, color = "red") + mapview(od_jittered_city, color = "blue")
+```
+
+
 ```{r}
 city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
 
+# Generate dual-network radar charts (Core=Red, Cycle=Blue)
 for (city_name in city_names) {
   generate_radar_chart(
     city_name = city_name,
     rnet_core = rnet_core,
+    rnet_existing = rnet_existing,
     lads = lads,
     intermediate_zone = intermediate_zone,
     rnet_npt = rnet_npt,
     crs_target = crs_target,
     od_data = od_data,
+    od_points = od_points,
     dist_threshold = 500,
     buffer_distance = 500,
-    save_path = glue::glue("./plot/", city_name , "_radar_chart.jpg")
+    save_path = glue::glue("./plot/", city_name , "_dual_network_radar_chart.jpg")
   )
 }
+```
+Code to generate the existing cycle network (existing_cycle_network.gpkg)
+```{r}
+# city_names = c("Glasgow City", "City of Edinburgh", "Aberdeen City", "Dundee City")
 
+# # Initialize an empty list to store cycle networks for each city
+# cycle_nets_list = list()
+
+# # Loop through each city to create cycle networks
+# for (i in seq_along(city_names)) {
+#   city_name = city_names[i]
+  
+#   cat("Processing", city_name, "...\n")
+  
+#   # Get travel network for the city
+#   osm = osmactive::get_travel_network("Scotland", boundary = lads[lads$LAD23NM == city_name, ], boundary_type = "clipsrc")
+#   cycle_net = osmactive::get_cycling_network(osm)
+#   drive_net = osmactive::get_driving_network(osm)
+#   cycle_net = osmactive::distance_to_road(cycle_net, drive_net)
+#   cycle_net = osmactive::classify_cycle_infrastructure(cycle_net) |> st_transform(27700)
+  
+#   # Add city identifier to the cycle network
+#   cycle_net$city = city_name
+  
+#   # Store in list
+#   cycle_nets_list[[i]] = cycle_net
+  
+#   cat("Completed", city_name, "\n")
+# }
+
+# # Combine all cycle networks into a single sf object
+# rnet_cycle = do.call(rbind, cycle_nets_list)
+
+# # Display summary
+# cat("Combined cycle network created with", nrow(rnet_cycle), "features across", length(city_names), "cities\n")
+
+# # Optional: View the combined network
+# mapview::mapview(rnet_cycle, zcol = "city")
+
+# sf::st_write(rnet_cycle, "network_eval_file/existing_cycle_network.gpkg")
 ```
 
+
+## OD-Based Efficiency Analysis
+
+```{r}
+source("R/net_eval.R")
+
+# Initialize results list
+results_list = list()
+
+# Run analysis for all cities
+for (i in seq_along(city_names)) {
+  test_city = city_names[i]
+  cat("Testing city:", test_city, "\n")
+  
+  city_boundary = lads |> filter(LAD23NM == test_city)
+  od_points_city = od_points[city_boundary, ]
+  rnet_core_city = sf::st_intersection(rnet_core, city_boundary)
+  rnet_cycle_city = rnet_existing[city_boundary, ]
+  
+  cat("=== TRULY Fair Network Comparison for", test_city, "===\n")
+  cat("Key principle: Same OD points for all networks, unsuccessful routing = 0 efficiency\n\n")
+
+  # Test with core network
+  cat("--- Core Network ---\n")
+  core_results = compute_directness_efficiency(rnet_core_city, od_points_city, lads, city_name = test_city)
+
+  # Test with cycle network  
+  cat("\n--- Cycle Network ---\n")
+  cycle_results = compute_directness_efficiency(rnet_cycle_city, od_points_city, lads, city_name = test_city)
+
+  # Store results for this city
+  results_list[[test_city]] = list(
+    core_network = list(
+      E_glob = core_results$E_glob,
+      E_loc = core_results$E_loc,
+      D = core_results$D,
+      routing_success_rate = core_results$routing_success_rate,
+      routable_pairs = core_results$routable_pairs,
+      total_pairs = core_results$total_pairs
+    ),
+    cycle_network = list(
+      E_glob = cycle_results$E_glob,
+      E_loc = cycle_results$E_loc,
+      D = cycle_results$D,
+      routing_success_rate = cycle_results$routing_success_rate,
+      routable_pairs = cycle_results$routable_pairs,
+      total_pairs = cycle_results$total_pairs
+    )
+  )
+
+  # Compare results
+  cat("\n=== Comparison Results for", test_city, "===\n")
+  cat("SAME OD points used for both networks:", core_results$total_od_count, "\n")
+  cat("SAME total pairs evaluated:", core_results$total_pairs, "\n\n")
+
+  cat("Core Network:\n")
+  cat("- Successfully routable pairs:", core_results$routable_pairs, "/", core_results$total_pairs,
+      "(", round(100 * core_results$routing_success_rate, 1), "%)\n")
+  cat("- Directness (including 0s):", round(core_results$D, 4), "\n")
+  cat("- Global Efficiency (including 0s):", round(core_results$E_glob, 4), "\n")
+  cat("- Local Efficiency (including 0s):", round(core_results$E_loc, 4), "\n")
+
+  cat("\nCycle Network:\n")
+  cat("- Successfully routable pairs:", cycle_results$routable_pairs, "/", cycle_results$total_pairs,
+      "(", round(100 * cycle_results$routing_success_rate, 1), "%)\n")
+  cat("- Directness (including 0s):", round(cycle_results$D, 4), "\n")
+  cat("- Global Efficiency (including 0s):", round(cycle_results$E_glob, 4), "\n")
+  cat("- Local Efficiency (including 0s):", round(cycle_results$E_loc, 4), "\n")
+
+  # Calculate relative performance
+  cat("\n=== Relative Performance for", test_city, "===\n")
+  if (core_results$D > cycle_results$D) {
+    cat("Core network has", round(core_results$D / cycle_results$D, 2), "x better directness\n")
+  } else {
+    cat("Cycle network has", round(cycle_results$D / core_results$D, 2), "x better directness\n")
+  }
+
+  if (core_results$E_glob > cycle_results$E_glob) {
+    cat("Core network has", round(core_results$E_glob / cycle_results$E_glob, 2), "x better global efficiency\n")
+  } else {
+    cat("Cycle network has", round(cycle_results$E_glob / core_results$E_glob, 2), "x better global efficiency\n")
+  }
+
+  if (core_results$E_loc > cycle_results$E_loc) {
+    cat("Core network has", round(core_results$E_loc / cycle_results$E_loc, 2), "x better local efficiency\n")
+  } else {
+    cat("Cycle network has", round(cycle_results$E_loc / core_results$E_loc, 2), "x better local efficiency\n")
+  }
+  
+  cat("\n" , rep("=", 50), "\n\n")
+}
+
+# Save results to file
+saveRDS(results_list, "network_eval_file/all_cities_efficiency_results.Rds")
+
+# Print summary of all results
+cat("=== SUMMARY OF ALL CITIES ===\n")
+for (city in names(results_list)) {
+  cat("\n", city, ":\n")
+  cat("  Core Network - E_glob:", round(results_list[[city]]$core_network$E_glob, 4), 
+      ", E_loc:", round(results_list[[city]]$core_network$E_loc, 4), 
+      ", D:", round(results_list[[city]]$core_network$D, 4), "\n")
+  cat("  Cycle Network - E_glob:", round(results_list[[city]]$cycle_network$E_glob, 4), 
+      ", E_loc:", round(results_list[[city]]$cycle_network$E_loc, 4), 
+      ", D:", round(results_list[[city]]$cycle_network$D, 4), "\n")
+}
+```
+
+| City              | Metric             | Core Network | Existing Network | Improvement Factor        |
+|------------------|--------------------|--------------|------------------|---------------------------|
+| **Glasgow City** | Directness         | 0.0296       | 0.0056           | 5.29 ×                    |
+|                  | Global Efficiency  | 0.0634       | 0.0014           | 45.29 ×                   |
+|                  | Local Efficiency   | 0.2637       | 0.0380           | 6.94 ×                    |
+|                  | Routable Pairs     | 3.2%         | 0.2%             | 16.00 ×                   |
+| **Edinburgh**     | Directness         | 0.1259       | 0.0049           | 25.71 ×                   |
+|                  | Global Efficiency  | 0.4068       | 0.0040           | 101.70 ×                  |
+|                  | Local Efficiency   | 0.2374       | 0.0418           | 5.68 ×                    |
+|                  | Routable Pairs     | 18.2%        | 0.3%             | 60.67 ×                   |
+| **Aberdeen City**| Directness         | 0.4894       | 0.0218           | 22.45 ×                   |
+|                  | Global Efficiency  | 0.7914       | 0.0042           | 188.43 ×                  |
+|                  | Local Efficiency   | 0.6284       | 0.2356           | 2.67 ×                    |
+|                  | Routable Pairs     | 59.6%        | 0.4%             | 149.00 ×                  |
+| **Dundee City**  | Directness         | 0.0937       | 0.0217           | 4.32 ×                    |
+|                  | Global Efficiency  | 0.0583       | 0.0043           | 13.56 ×                   |
+|                  | Local Efficiency   | 0.3575       | 0.0695           | 5.14 ×                    |
+|                  | Routable Pairs     | 3.6%         | 0.6%             | 6.00 ×                    |
+
+
+```{r}
+library(ggplot2)
+library(patchwork)  # For combining plots side by side
+
+# Define performance metrics data
+performance_metrics <- list(
+  "Glasgow City" = list(
+    directness = c(core = 0.0296, existing = 0.0056, factor = 5.29),
+    global_eff = c(core = 0.0634, existing = 0.0014, factor = 45.29),
+    local_eff = c(core = 0.2637, existing = 0.0380, factor = 6.94),
+    routable = c(core = 3.2, existing = 0.2, factor = 16.00)
+  ),
+  "City of Edinburgh" = list(
+    directness = c(core = 0.1259, existing = 0.0049, factor = 25.71),
+    global_eff = c(core = 0.4068, existing = 0.0040, factor = 101.70),
+    local_eff = c(core = 0.2374, existing = 0.0418, factor = 5.68),
+    routable = c(core = 18.2, existing = 0.3, factor = 60.67)
+  ),
+  "Aberdeen City" = list(
+    directness = c(core = 0.4894, existing = 0.0218, factor = 22.45),
+    global_eff = c(core = 0.7914, existing = 0.0042, factor = 188.43),
+    local_eff = c(core = 0.6284, existing = 0.2356, factor = 2.67),
+    routable = c(core = 59.6, existing = 0.4, factor = 149.00)
+  ),
+  "Dundee City" = list(
+    directness = c(core = 0.0937, existing = 0.0217, factor = 4.32),
+    global_eff = c(core = 0.0583, existing = 0.0043, factor = 13.56),
+    local_eff = c(core = 0.3575, existing = 0.0695, factor = 5.14),
+    routable = c(core = 3.6, existing = 0.6, factor = 6.00)
+  )
+)
+
+# Create plots for each city
+for (city_name in city_names) {
+  cat("Creating plots for", city_name, "...\n")
+  
+  # Filter city boundary
+  city_boundary = lads |> filter(LAD23NM == city_name)
+  
+  # Filter networks for the city
+  rnet_core_city = sf::st_intersection(rnet_core, city_boundary)
+  rnet_existing_city = sf::st_intersection(rnet_existing, city_boundary)
+  
+  # Get performance metrics for this city
+  metrics = performance_metrics[[city_name]]
+  
+  # Create performance text
+  perf_text = paste(
+    sprintf("Directness: %.3f vs %.3f (%.1fx)", metrics$directness["core"], metrics$directness["existing"], metrics$directness["factor"]),
+    sprintf("Global Eff: %.3f vs %.3f (%.1fx)", metrics$global_eff["core"], metrics$global_eff["existing"], metrics$global_eff["factor"]),
+    sprintf("Local Eff: %.3f vs %.3f (%.1fx)", metrics$local_eff["core"], metrics$local_eff["existing"], metrics$local_eff["factor"]),
+    sprintf("Routable: %.1f%% vs %.1f%% (%.1fx)", metrics$routable["core"], metrics$routable["existing"], metrics$routable["factor"]),
+    sep = "\n"
+  )
+  
+  # Create core network plot
+  plot_core <- ggplot() +
+    geom_sf(data = city_boundary, fill = "lightgray", color = "darkgray", alpha = 0.3) +
+    geom_sf(data = rnet_core_city, color = "red", size = 0.8) +
+    ggtitle(paste("Core Network -", city_name)) +
+    theme_void() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+      plot.margin = margin(10, 10, 10, 10)
+    )
+  
+  # Create existing network plot
+  plot_existing <- ggplot() +
+    geom_sf(data = city_boundary, fill = "lightgray", color = "darkgray", alpha = 0.3) +
+    geom_sf(data = rnet_existing_city, color = "blue", size = 0.8) +
+    ggtitle(paste("Existing Network -", city_name)) +
+    theme_void() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+      plot.margin = margin(10, 10, 10, 10)
+    )
+  
+  # Create performance metrics plot
+  plot_metrics <- ggplot() +
+    annotate("text", x = 0.5, y = 0.5, 
+             label = paste("Performance Comparison\n(Core vs Existing)\n\n", perf_text), 
+             hjust = 0.5, vjust = 0.5, size = 3.5, 
+             fontface = "bold", color = "darkblue") +
+    xlim(0, 1) + ylim(0, 1) +
+    theme_void() +
+    theme(
+      panel.border = element_rect(color = "lightgray", fill = NA, size = 1),
+      plot.margin = margin(10, 10, 10, 10)
+    )
+  
+  # Combine plots: networks side by side, metrics below
+  combined_plot <- (plot_core + plot_existing) / plot_metrics + 
+    plot_layout(heights = c(2, 1)) +
+    plot_annotation(
+      title = paste("Network Comparison:", city_name),
+      theme = theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+    )
+  
+  # Display the plot
+  print(combined_plot)
+  
+  # Save the plot
+  ggsave(
+    filename = paste0("plot/network_comparison_", gsub(" ", "_", city_name), ".png"),
+    plot = combined_plot,
+    width = 12, 
+    height = 9, 
+    dpi = 300,
+    bg = "white"
+  )
+  
+  cat("Saved plot for", city_name, "\n\n")
+}
+```

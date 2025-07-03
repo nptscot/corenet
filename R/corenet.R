@@ -2,8 +2,12 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr", "group_column"))
-
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr", "group_column",
+                         # Variables from net_eval.R functions
+                         "geometry", "InterZone", "TotPop2011", "StdAreaKm2", "ResPop2011", "W_i", 
+                         "has_intersection", "covered_area", "covered_area_km2", "pop_density", 
+                         "covered_population", "distance_to_network", "all", "length_m", "km",
+                         "target_id", "id"))
 #' Prepare a cohesive cycling network using NPT data
 #'
 #' This function prepares the base network for generating a cohesive cycling network 
@@ -193,9 +197,9 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
     # Perform DBSCAN clustering
     coordinates = sf::st_coordinates(centroids)
-    coordinates_clean = coordinates[complete.cases(coordinates), ]
+    coordinates_clean = coordinates[stats::complete.cases(coordinates), ]
     clusters = dbscan::dbscan(coordinates_clean, eps = 18, minPts = 1)
-    centroids_clean = centroids[complete.cases(coordinates), ]
+    centroids_clean = centroids[stats::complete.cases(coordinates), ]
     centroids_clean$cluster = clusters$cluster
     unique_centroids = centroids_clean[!duplicated(centroids_clean$cluster), ]   
 
@@ -321,6 +325,9 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   # Prepare network and calculate paths
   prepared_network = prepare_network(cohesive_base_network, key_attribute , road_scores, transform_crs = crs , penalty_value = penalty_value) 
 
+  # Initialize cache environment for path calculations
+  path_cache_env = new.env(parent = emptyenv())
+  assign("path_cache_env", path_cache_env, envir = .GlobalEnv)
 
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
@@ -479,12 +486,10 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @param minDistPts The minimum distance (in meters) to consider for path calculations.
 #' @param centroids An sf object containing centroids to which paths are calculated.
 #' @param path_type A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
-#' @param max_path_weight 
+#' @param max_path_weight Maximum weight allowed for paths in network calculations.
+#' @param crs_transform The coordinate reference system to transform to, default is 27700 (British National Grid).
 #' 
-#'        - 'shortest': Calculates the shortest path considering weights.
-#'        - 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
-#'        - 'all_simple': Calculates all simple paths, ignoring weights.
-#' @return An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
+#' @return A list containing the computed paths and their associated weights.
 #' @export
 
 calculate_paths_from_point_dist = function(
