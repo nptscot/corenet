@@ -11,7 +11,8 @@ calculate_paths_from_point_dist(
   maxDistPts = 1500,
   centroids,
   path_type = "shortest",
-  max_path_weight = 10
+  max_path_weight = 10,
+  crs_transform = 27700
 )
 }
 \arguments{

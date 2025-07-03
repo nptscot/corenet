@@ -108,7 +108,8 @@ anime_join = function(
   net_target_aggregated = net_source_matches |>
     dplyr::group_by(row_number = target_id) |>
     dplyr::summarise(
-      !!rlang::sym(new_name) := agg_fun(!!mult_expr, na.rm = TRUE)
+      !!rlang::sym(new_name) := agg_fun(!!mult_expr, na.rm = TRUE),
+      .groups = "drop"
     )
 
   # 6. If aggregator is max, round the result
