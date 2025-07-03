@@ -28,14 +28,15 @@ calculate_paths_from_point_dist(
 
 \item{path_type}{A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.}
 
-\item{max_path_weight}{\itemize{
-\item 'shortest': Calculates the shortest path considering weights.
-- 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
-- 'all_simple': Calculates all simple paths, ignoring weights.
-}}
+\item{max_path_weight}{Maximum weight allowed for paths in network calculations.}
+
+\item{crs_transform}{The coordinate reference system to transform to, default is 27700 (British National Grid).}
 }
 \value{
-An sf object containing the paths that meet the criteria or NULL if no paths meet the criteria.
+A list containing the computed paths and their associated weights.
+- 'shortest': Calculates the shortest path considering weights.
+- 'all_shortest': Calculates all paths that tie for the shortest distance, considering weights.
+- 'all_simple': Calculates all simple paths, ignoring weights.
 }
 \description{
 This function determines the network paths from a specific point to multiple centroids based on distance thresholds.
