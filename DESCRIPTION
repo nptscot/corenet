@@ -32,8 +32,7 @@ Imports:
     anime,
     stats,
     grDevices,
-    graphics,
-    data.table    
+    graphics    
 Suggests: 
     tibble,
     tmaptools,

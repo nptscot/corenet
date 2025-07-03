@@ -150,6 +150,7 @@ cohesive_network_prep = function(base_network, influence_network, target_zone, c
 #' @param n_removeDangles Number of iterations to remove dangles from the network, default is 6.
 #' @param penalty_value The penalty value for roads with low values, default is 1.
 #' @param group_column The column name to group the network by edge betweenness, default is "name_1".
+#' @param max_path_weight Maximum weight allowed for paths in network calculations, default is 10.
 #' @return A spatial object representing the largest cohesive component of the network, free of dangles.
 #' @export
 #' @examples

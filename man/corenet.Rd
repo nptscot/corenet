@@ -44,15 +44,14 @@ corenet(
 \item{penalty_value}{The penalty value for roads with low values, default is 1.}
 
 \item{group_column}{The column name to group the network by edge betweenness, default is "name_1".}
+
+\item{max_path_weight}{Maximum weight allowed for paths in network calculations, default is 10.}
 }
 \value{
 A spatial object representing the largest cohesive component of the network, free of dangles.
 }
 \description{
-This function processes the provided network data to identify and analyze
-significant routes based on a percentile threshold. It performs spatial
-operations, clusters data points, and calculates the largest network component
-without dangles, aiming to develop a cohesive cycling network infrastructure.
+Generating cohesive cycling network
 }
 \examples{
 library(sf)
