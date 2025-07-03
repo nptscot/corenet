@@ -2,7 +2,7 @@
 utils::globalVariables(c("edge_paths", "influence_network", "all_fastest_bicycle_go_dutch", 
                          "weight", "to_linegraph", "edges", "group", "mean_potential", "LAD23NM", 
                          "road_function",  "grid_id", "density", 
-                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr", "group_column"))
+                         "max_value", "min_value", "arterialness", "road_score", "value", "key_attribute", "n_group",".data", "n_removeDangles", "path_type", "maxDistPts", "minDistPts","penalty_value","penalty", "use_stplanr", "group_column", "path_cache_env"))
 
 #' Prepare a cohesive cycling network using NPT data
 #'
@@ -321,6 +321,8 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
   # Prepare network and calculate paths
   prepared_network = prepare_network(cohesive_base_network, key_attribute , road_scores, transform_crs = crs , penalty_value = penalty_value) 
 
+  # Initialize cache environment for path calculations
+  path_cache_env = new.env(parent = emptyenv())
 
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
