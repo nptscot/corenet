@@ -418,7 +418,9 @@ generate_radar_chart = function(city_name,
                                 dist_threshold = 500, buffer_distance = 500, 
                                 save_path = NULL) {
   
-  library(fmsb)
+  if (!requireNamespace("fmsb", quietly = TRUE)) {
+    stop("Package 'fmsb' is required but not installed. Please install it with install.packages('fmsb')")
+  }
   
   cat("Generating dual-network radar chart for", city_name, "\n")
   
@@ -550,17 +552,17 @@ generate_radar_chart = function(city_name,
   
   # Generate radar chart
   if (!is.null(save_path)) {
-    png(filename = save_path, width = 1200, height = 900)
+    grDevices::png(filename = save_path, width = 1200, height = 900)
   }
 
   # Create the radar chart with both networks
-  radarchart(
+  fmsb::radarchart(
     df_radar,
     axistype = 1,
     seg = 5,
     # Core network in red, cycle network in blue
     pcol = c("red", "blue"),
-    pfcol = c(rgb(1, 0, 0, 0.3), rgb(0, 0, 1, 0.3)),  # Semi-transparent fills
+    pfcol = c(grDevices::rgb(1, 0, 0, 0.3), grDevices::rgb(0, 0, 1, 0.3)),  # Semi-transparent fills
     plwd = 3,
     cglcol = "grey",
     cglty = 1,
@@ -573,7 +575,7 @@ generate_radar_chart = function(city_name,
   )
   
   # Add legend
-  legend(
+  graphics::legend(
     x = "topright",
     legend = c("Core Network", "Cycle Network"),
     col = c("red", "blue"),
@@ -632,7 +634,7 @@ generate_radar_chart = function(city_name,
   }
   
   if (!is.null(save_path)) {
-    dev.off()
+    grDevices::dev.off()
     cat("  Saved radar chart to:", save_path, "\n")
   }
   

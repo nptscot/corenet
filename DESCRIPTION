@@ -7,6 +7,8 @@ Authors@R: c(
     person("Robin", "Lovelace", role = c("aut", "ctb"),
            comment = c(ORCID = "0000-0001-5679-6536"))
   )
+Author: Zhao Wang [aut, cre] (<https://orcid.org/0000-0002-4054-0533>), Robin Lovelace [aut, ctb] (<https://orcid.org/0000-0001-5679-6536>)
+Maintainer: Zhao Wang <wangzhao0217@gmail.com>
 Description: This package provides functions to generate 'core' transport networks from
     'complete' transport network datasets. It can take a transport network from
     'OpenStreetMap' and saved as an 'sf' object via 'osmextract' or other package
@@ -29,7 +31,9 @@ Imports:
     rlang,
     anime,
     stats,
-    grDevices    
+    grDevices,
+    graphics,
+    data.table    
 Suggests: 
     tibble,
     tmaptools,

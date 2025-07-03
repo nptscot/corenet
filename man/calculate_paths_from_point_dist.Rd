@@ -12,7 +12,8 @@ calculate_paths_from_point_dist(
   centroids,
   path_type = "shortest",
   max_path_weight = 10,
-  crs_transform = 27700
+  crs_transform = 27700,
+  cache_env = NULL
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ calculate_paths_from_point_dist(
 \item{max_path_weight}{Maximum weight allowed for paths in network calculations.}
 
 \item{crs_transform}{The coordinate reference system to transform to, default is 27700 (British National Grid).}
+
+\item{cache_env}{An optional environment for caching results. If NULL, no caching is performed.}
 }
 \value{
 A list containing the computed paths and their associated weights.

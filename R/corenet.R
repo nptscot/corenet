@@ -327,12 +327,11 @@ corenet = function(influence_network, cohesive_base_network, target_zone, key_at
 
   # Initialize cache environment for path calculations
   path_cache_env = new.env(parent = emptyenv())
-  assign("path_cache_env", path_cache_env, envir = .GlobalEnv)
 
   all_paths = purrr::map_dfr(
       seq_len(nrow(unique_centroids)),
       function(n) {
-          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts, minDistPts = minDistPts, max_path_weight = max_path_weight)
+          calculate_paths_from_point_dist(prepared_network, point = unique_centroids[n,], centroids = unique_centroids, path_type = "shortest", maxDistPts = maxDistPts, minDistPts = minDistPts, max_path_weight = max_path_weight, cache_env = path_cache_env)
       }
   )
 
@@ -488,6 +487,7 @@ prepare_network = function(network, key_attribute = "all_fastest_bicycle_go_dutc
 #' @param path_type A character string indicating the type of path calculation: 'shortest', 'all_shortest', or 'all_simple'.
 #' @param max_path_weight Maximum weight allowed for paths in network calculations.
 #' @param crs_transform The coordinate reference system to transform to, default is 27700 (British National Grid).
+#' @param cache_env An optional environment for caching results. If NULL, no caching is performed.
 #' 
 #' @return A list containing the computed paths and their associated weights.
 #' @export
@@ -500,7 +500,8 @@ calculate_paths_from_point_dist = function(
   centroids,
   path_type = "shortest",
   max_path_weight = 10,
-  crs_transform = 27700
+  crs_transform = 27700,
+  cache_env = NULL
 ) {
   # 1) Ensure the network is in a meter-based CRS, transform if necessary
   net_crs = sf::st_crs(network)
@@ -515,9 +516,9 @@ calculate_paths_from_point_dist = function(
   #    You can modify how this key is generated if your 'point' is already sf-compatible
   point_key = paste(sort(as.character(point)), collapse = "_")
   
-  # 3) Check if result is already cached
-  if (exists(point_key, envir = path_cache_env)) {
-    return(get(point_key, envir = path_cache_env))
+  # 3) Check if result is already cached (only if cache_env is provided)
+  if (!is.null(cache_env) && exists(point_key, envir = cache_env)) {
+    return(get(point_key, envir = cache_env))
   }
   
   # 4) Convert the point and centroids to sfc if not already
@@ -536,7 +537,9 @@ calculate_paths_from_point_dist = function(
   
   # If no centroids qualify, cache NULL and return
   if (!length(valid_idx)) {
-    assign(point_key, NULL, envir = path_cache_env)
+    if (!is.null(cache_env)) {
+      assign(point_key, NULL, envir = cache_env)
+    }
     return(NULL)
   }
   
@@ -573,7 +576,9 @@ calculate_paths_from_point_dist = function(
   # 9) Filter out paths whose total weight exceeds threshold
   valid_paths = paths_from_point[total_weights <= max_path_weight, ]
   if (!nrow(valid_paths)) {
-    assign(point_key, NULL, envir = path_cache_env)
+    if (!is.null(cache_env)) {
+      assign(point_key, NULL, envir = cache_env)
+    }
     return(NULL)
   }
   
@@ -586,7 +591,9 @@ calculate_paths_from_point_dist = function(
     sf::st_as_sf()
   
   # 12) Store in cache and return
-  assign(point_key, result, envir = path_cache_env)
+  if (!is.null(cache_env)) {
+    assign(point_key, result, envir = cache_env)
+  }
   return(result)
 }
 
